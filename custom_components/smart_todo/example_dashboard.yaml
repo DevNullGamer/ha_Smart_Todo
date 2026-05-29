@@ -1,0 +1,16 @@
+# Replace 'todo.smart_todo' with your actual entity ID (found in Settings → Entities)
+
+title: Smart Todo Dashboard
+views:
+  - title: Smart Todo Dashboard
+    cards:
+      - type: todo-list
+        entity: todo.smart_todo
+        title: My Tasks
+
+      - type: markdown
+        title: Task Summary
+        content: >
+          **Total:** {{ state_attr('todo.smart_todo', 'total_tasks') }}
+          | **Overdue:** {{ state_attr('todo.smart_todo', 'overdue_count') }}
+          | **Done today:** {{ state_attr('todo.smart_todo', 'completed_today') }}

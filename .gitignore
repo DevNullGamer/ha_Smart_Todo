@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.env
+.venv
+venv/
+
+# Home Assistant dev
+*.log
+.HA_VERSION
+.storage/
+config/
+*.orig
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Forge agent (dev tooling — not part of the integration)
+.agents/
+forge-workspace/
+.tmp-admin-check/
+*.forge.identity.md
+.forge-identity/
+
+# Claude Code (dev tooling)
+.claude/
+
+# Note: AGENTS.md at repo root is the Forge loader — commit it if you want
+# Forge to auto-bootstrap for collaborators, otherwise add it here too.

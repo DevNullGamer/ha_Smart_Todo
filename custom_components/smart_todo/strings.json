@@ -1,0 +1,96 @@
+{
+  "title": "Smart Todo",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Smart Todo",
+        "description": "Create a Smart Todo list.",
+        "data": {
+          "name": "List name"
+        },
+        "data_description": {
+          "name": "A friendly name for this todo list (e.g. Family Tasks)."
+        }
+      }
+    },
+    "error": {
+      "name_empty": "Name cannot be empty.",
+      "already_configured": "A Smart Todo list with this name already exists."
+    },
+    "abort": {
+      "already_configured": "A Smart Todo list with this name is already configured."
+    }
+  },
+  "services": {
+    "create_task": {
+      "name": "Create task",
+      "description": "Creates a new task in the Smart Todo list.",
+      "fields": {
+        "title": { "name": "Title", "description": "Task title." },
+        "notes": { "name": "Notes", "description": "Optional notes or description." },
+        "due_at": { "name": "Due", "description": "Due date/time (ISO 8601)." },
+        "priority": { "name": "Priority", "description": "1=low, 2=medium, 3=high." },
+        "assignee": { "name": "Assignee", "description": "Optional assignee name." },
+        "recurrence": { "name": "Recurrence", "description": "Recurrence rule as a dict." }
+      }
+    },
+    "complete_task": {
+      "name": "Complete task",
+      "description": "Marks a task as completed and triggers recurrence recalculation.",
+      "fields": {
+        "task_id": { "name": "Task ID", "description": "Unique task identifier." }
+      }
+    },
+    "reopen_task": {
+      "name": "Reopen task",
+      "description": "Reopens a completed task.",
+      "fields": {
+        "task_id": { "name": "Task ID", "description": "Unique task identifier." }
+      }
+    },
+    "update_task": {
+      "name": "Update task",
+      "description": "Updates one or more fields of an existing task.",
+      "fields": {
+        "task_id": { "name": "Task ID", "description": "Unique task identifier." },
+        "title": { "name": "Title", "description": "New title (optional)." },
+        "notes": { "name": "Notes", "description": "New notes (optional)." },
+        "due_at": { "name": "Due", "description": "New due date/time (optional)." },
+        "priority": { "name": "Priority", "description": "New priority (optional)." },
+        "assignee": { "name": "Assignee", "description": "New assignee (optional)." }
+      }
+    },
+    "snooze_task": {
+      "name": "Snooze task",
+      "description": "Snoozes a task until a specified date/time.",
+      "fields": {
+        "task_id": { "name": "Task ID", "description": "Unique task identifier." },
+        "snooze_until": { "name": "Snooze until", "description": "Snooze until this date/time (ISO 8601)." }
+      }
+    },
+    "delete_task": {
+      "name": "Delete task",
+      "description": "Permanently deletes a task.",
+      "fields": {
+        "task_id": { "name": "Task ID", "description": "Unique task identifier." }
+      }
+    },
+    "recalculate_recurrence": {
+      "name": "Recalculate recurrence",
+      "description": "Recalculates due dates for recurring tasks.",
+      "fields": {
+        "task_id": { "name": "Task ID", "description": "Optional. If omitted, recalculates all tasks." }
+      }
+    },
+    "get_tasks": {
+      "name": "Get tasks",
+      "description": "Returns full task list with all fields as service response data.",
+      "fields": {
+        "overdue_only": { "name": "Overdue only", "description": "If true, return only overdue tasks." },
+        "assignee": { "name": "Assignee filter", "description": "Filter by assignee name." },
+        "priority": { "name": "Priority filter", "description": "Filter by priority (1/2/3)." },
+        "completed": { "name": "Completed filter", "description": "If true, include only completed. If false, exclude completed. If omitted, include all." }
+      }
+    }
+  }
+}

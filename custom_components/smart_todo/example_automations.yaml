@@ -1,0 +1,62 @@
+# Smart Todo — Example Automations
+# Copy and paste these into your automations.yaml or the Automation Editor in Home Assistant.
+
+- alias: "Smart Todo: Create weekly review task"
+  description: "Creates a 'Weekly Review' task every Sunday at 08:00"
+  trigger:
+    - platform: time
+      at: "08:00:00"
+  condition:
+    - condition: time
+      weekday:
+        - sun
+  action:
+    - service: smart_todo.create_task
+      data:
+        title: "Weekly Review"
+        priority: 2
+        assignee: "Jesper"
+
+- alias: "Smart Todo: Complete task on toggle"
+  trigger:
+    - platform: state
+      entity_id: input_boolean.trash_done
+      to: "on"
+  action:
+    - service: smart_todo.complete_task
+      data:
+        task_id: "YOUR_TASK_ID_HERE"
+    - service: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.trash_done
+
+- alias: "Smart Todo: Morning overdue notification"
+  trigger:
+    - platform: time
+      at: "07:30:00"
+  action:
+    - service: smart_todo.get_tasks
+      data:
+        overdue_only: true
+      response_variable: overdue_result
+    - condition: template
+      value_template: "{{ overdue_result.tasks | length > 0 }}"
+    - service: notify.mobile_app_your_phone
+      data:
+        title: "Overdue Tasks"
+        message: >
+          You have {{ overdue_result.tasks | length }} overdue task(s):
+          {% for t in overdue_result.tasks %}
+          - {{ t.title }}{% endfor %}
+
+- alias: "Smart Todo: Snooze task to tomorrow"
+  trigger:
+    - platform: event
+      event_type: smart_todo_snooze_requested
+  action:
+    - service: smart_todo.snooze_task
+      data:
+        task_id: "{{ trigger.event.data.task_id }}"
+        snooze_until: >
+          {{ (now() + timedelta(days=1)).replace(hour=8, minute=0, second=0)
+             .isoformat() }}

@@ -1,0 +1,11 @@
+{
+  "domain": "smart_todo",
+  "name": "Smart Todo",
+  "codeowners": ["@DevNullGamer"],
+  "config_flow": true,
+  "documentation": "https://github.com/DevNullGamer/ha_Smart_Todo",
+  "integration_type": "local",
+  "iot_class": "local_polling",
+  "requirements": [],
+  "version": "0.1.0"
+}

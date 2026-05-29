@@ -1,0 +1,180 @@
+create_task:
+  name: Create task
+  description: Creates a new task in the Smart Todo list.
+  fields:
+    title:
+      name: Title
+      description: Task title.
+      required: true
+      example: "Take out trash"
+      selector:
+        text:
+    notes:
+      name: Notes
+      description: Optional notes or description.
+      example: "Remember bags"
+      selector:
+        text:
+          multiline: true
+    due_at:
+      name: Due
+      description: Due date/time as ISO 8601 string.
+      example: "2026-06-01T09:00:00"
+      selector:
+        text:
+    priority:
+      name: Priority
+      description: "1=low, 2=medium, 3=high"
+      default: 2
+      selector:
+        number:
+          min: 1
+          max: 3
+          mode: box
+    assignee:
+      name: Assignee
+      description: Optional assignee name.
+      example: "Jesper"
+      selector:
+        text:
+    recurrence:
+      name: Recurrence
+      description: Recurrence rule as a dict (mode, interval_days, weekdays, etc.)
+      selector:
+        object:
+
+complete_task:
+  name: Complete task
+  description: Marks a task completed and triggers recurrence recalculation.
+  fields:
+    task_id:
+      name: Task ID
+      description: Unique task identifier (UUID).
+      required: true
+      example: "abc-123"
+      selector:
+        text:
+
+reopen_task:
+  name: Reopen task
+  description: Reopens a completed task.
+  fields:
+    task_id:
+      name: Task ID
+      description: Unique task identifier.
+      required: true
+      selector:
+        text:
+
+update_task:
+  name: Update task
+  description: Updates one or more fields of an existing task.
+  fields:
+    task_id:
+      name: Task ID
+      description: Unique task identifier.
+      required: true
+      selector:
+        text:
+    title:
+      name: Title
+      description: New title.
+      selector:
+        text:
+    notes:
+      name: Notes
+      description: New notes.
+      selector:
+        text:
+          multiline: true
+    due_at:
+      name: Due
+      description: New due date/time as ISO 8601.
+      selector:
+        text:
+    priority:
+      name: Priority
+      description: "1=low, 2=medium, 3=high"
+      selector:
+        number:
+          min: 1
+          max: 3
+          mode: box
+    assignee:
+      name: Assignee
+      description: New assignee name.
+      selector:
+        text:
+    recurrence:
+      name: Recurrence
+      description: Updated recurrence rule as a dict.
+      selector:
+        object:
+
+snooze_task:
+  name: Snooze task
+  description: Snoozes a task until a specified date/time.
+  fields:
+    task_id:
+      name: Task ID
+      description: Unique task identifier.
+      required: true
+      selector:
+        text:
+    snooze_until:
+      name: Snooze until
+      description: Snooze until this date/time (ISO 8601).
+      required: true
+      example: "2026-06-02T08:00:00"
+      selector:
+        text:
+
+delete_task:
+  name: Delete task
+  description: Permanently deletes a task.
+  fields:
+    task_id:
+      name: Task ID
+      description: Unique task identifier.
+      required: true
+      selector:
+        text:
+
+recalculate_recurrence:
+  name: Recalculate recurrence
+  description: Recalculates due dates for recurring tasks.
+  fields:
+    task_id:
+      name: Task ID
+      description: "Optional. If omitted, recalculates all tasks."
+      selector:
+        text:
+
+get_tasks:
+  name: Get tasks
+  description: Returns full task list with all fields as service response data.
+  fields:
+    overdue_only:
+      name: Overdue only
+      description: If true, return only overdue tasks.
+      default: false
+      selector:
+        boolean:
+    assignee:
+      name: Assignee filter
+      description: Filter by assignee name.
+      selector:
+        text:
+    priority:
+      name: Priority filter
+      description: "Filter by priority: 1, 2, or 3."
+      selector:
+        number:
+          min: 1
+          max: 3
+          mode: box
+    completed:
+      name: Completed filter
+      description: "true = completed only, false = incomplete only, omit = all."
+      selector:
+        boolean:
