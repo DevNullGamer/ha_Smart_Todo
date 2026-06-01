@@ -7,7 +7,7 @@ const ctx = await esbuild.context({
   entryPoints: ['smart-todo-card.ts'],
   bundle: true,
   outfile: '../custom_components/smart_todo/www/smart-todo-card.js',
-  format: 'esm',
+  format: 'iife',
   minify: !watch,
   sourcemap: watch ? 'inline' : false,
   target: 'es2022',

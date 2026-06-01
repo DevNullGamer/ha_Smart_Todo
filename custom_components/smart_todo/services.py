@@ -89,10 +89,10 @@ GET_TASKS_SCHEMA = vol.Schema(
 def _get_coordinator(hass: HomeAssistant, call: ServiceCall) -> SmartTodoCoordinator:
     """Return the first registered coordinator. Raises HomeAssistantError if none."""
     domain_data = hass.data.get(DOMAIN, {})
-    if not domain_data:
-        raise HomeAssistantError("Smart Todo integration is not configured.")
-    # Return first entry's coordinator (single-entry assumption for now)
-    return next(iter(domain_data.values()))
+    for value in domain_data.values():
+        if isinstance(value, SmartTodoCoordinator):
+            return value
+    raise HomeAssistantError("Smart Todo integration is not configured.")
 
 
 def _parse_iso_datetime(value: str, field_name: str) -> datetime:

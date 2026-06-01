@@ -363,17 +363,26 @@ export class SmartTodoCard extends LitElement {
     this._loading = true;
     this._error = undefined;
     try {
-      const result = await this._hass.callService(
+      const raw = await this._hass.callService(
         'smart_todo',
         'get_tasks',
         {},
         undefined,
         false,   // notifyOnFailure
         true,    // returnResponse
-      ) as { tasks: Task[] };
-      this._tasks = result?.tasks ?? [];
+      ) as { tasks?: Task[] } | { response?: { tasks?: Task[] } };
+      // HA wraps service response data under .response in some versions
+      const tasks = (raw as { response?: { tasks?: Task[] } }).response?.tasks
+        ?? (raw as { tasks?: Task[] }).tasks
+        ?? [];
+      this._tasks = tasks;
     } catch (err) {
-      this._error = `Failed to load tasks: ${err instanceof Error ? err.message : String(err)}`;
+      const msg = err instanceof Error
+        ? err.message
+        : (typeof err === 'object' && err !== null && 'message' in err)
+          ? String((err as { message: unknown }).message)
+          : JSON.stringify(err);
+      this._error = `Failed to load tasks: ${msg}`;
     } finally {
       this._loading = false;
     }

@@ -45,7 +45,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: SmartTodoConfigEntry) -
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id, None)
-        # Unregister services when last entry is removed
-        if not hass.data.get(DOMAIN):
+        # When the last real entry is removed, clean up fully
+        remaining = [v for v in hass.data[DOMAIN].values() if isinstance(v, SmartTodoCoordinator)]
+        if not remaining:
+            hass.data[DOMAIN].pop("_static_path_registered", None)
             async_unregister_services(hass)
     return unload_ok
