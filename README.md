@@ -45,6 +45,48 @@ Provide a name for the list (e.g. "Family Tasks") when prompted during setup.
 | `smart_todo.recalculate_recurrence` | Recalculate due dates |
 | `smart_todo.get_tasks` | Query tasks (returns response data) |
 
+## Lovelace Card
+
+A custom card is included that shows all task fields (priority, assignee, recurrence, overdue state) not visible in the native Todo card.
+
+### Add the resource
+
+In Home Assistant go to **Settings → Dashboards → Resources → Add resource**:
+
+| Field | Value |
+|-------|-------|
+| URL | `/local/community/smart_todo/smart-todo-card.js` |
+| Resource type | JavaScript module |
+
+Or add to your `configuration.yaml`:
+```yaml
+lovelace:
+  resources:
+    - url: /local/community/smart_todo/smart-todo-card.js
+      type: module
+```
+
+### Add the card
+
+```yaml
+type: custom:smart-todo-card
+entity: todo.family_tasks   # replace with your entity ID
+title: My Tasks             # optional
+```
+
+Find your entity ID in **Settings → Entities** — search for "smart_todo".
+
+### Build from source (contributors)
+
+```bash
+cd card-src
+npm install
+npm run build   # outputs to custom_components/smart_todo/www/smart-todo-card.js
+npm run dev     # watch mode with source maps
+```
+
+The compiled `smart-todo-card.js` is committed to the repo so end users do not need Node.js.
+
 ## Automation Examples
 
 See `custom_components/smart_todo/example_automations.yaml` for copy-pasteable examples covering task creation, completion triggers, overdue notifications, and snoozing.

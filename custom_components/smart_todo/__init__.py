@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -18,6 +19,14 @@ type SmartTodoConfigEntry = ConfigEntry  # Narrowed in coordinator; kept broad h
 async def async_setup_entry(hass: HomeAssistant, entry: SmartTodoConfigEntry) -> bool:
     """Set up Smart Todo from a config entry."""
     hass.data.setdefault(DOMAIN, {})
+    # Register card static files once (guard for multiple config entries)
+    if not hass.data[DOMAIN].get("_static_path_registered"):
+        hass.http.register_static_path(
+            "/local/community/smart_todo",
+            str(Path(__file__).parent / "www"),
+            cache_headers=False,
+        )
+        hass.data[DOMAIN]["_static_path_registered"] = True
     coordinator = SmartTodoCoordinator(hass, entry)
     await coordinator.async_setup()
     hass.data[DOMAIN][entry.entry_id] = coordinator

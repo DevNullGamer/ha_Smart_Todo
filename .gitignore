@@ -31,3 +31,9 @@ forge-workspace/
 
 # Note: AGENTS.md at repo root is the Forge loader — commit it if you want
 # Forge to auto-bootstrap for collaborators, otherwise add it here too.
+
+# Card toolchain
+card-src/node_modules/
+
+# Built card file — keep tracked (committed for end users)
+!custom_components/smart_todo/www/smart-todo-card.js
