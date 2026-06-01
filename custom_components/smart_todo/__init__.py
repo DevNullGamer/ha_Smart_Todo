@@ -24,7 +24,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmartTodoConfigEntry) ->
     if not hass.data[DOMAIN].get("_static_path_registered"):
         await hass.http.async_register_static_paths([
             StaticPathConfig(
-                url_path="/local/community/smart_todo",
+                url_path="/smart_todo/frontend",
                 path=str(Path(__file__).parent / "www"),
                 cache_headers=False,
             )

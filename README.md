@@ -55,14 +55,14 @@ In Home Assistant go to **Settings → Dashboards → Resources → Add resource
 
 | Field | Value |
 |-------|-------|
-| URL | `/local/community/smart_todo/smart-todo-card.js` |
+| URL | `/smart_todo/frontend/smart-todo-card.js` |
 | Resource type | JavaScript module |
 
 Or add to your `configuration.yaml`:
 ```yaml
 lovelace:
   resources:
-    - url: /local/community/smart_todo/smart-todo-card.js
+    - url: /smart_todo/frontend/smart-todo-card.js
       type: module
 ```
 
