@@ -99,11 +99,14 @@ class SmartTodoCoordinator(
         # Also honour an explicit due_at in definition_data (non-recurring tasks)
         elif definition_data.get("due_at") is not None:
             raw_due = definition_data["due_at"]
-            state.due_at = (
+            dt = (
                 datetime.fromisoformat(raw_due)
                 if isinstance(raw_due, str)
                 else raw_due
             )
+            if isinstance(dt, datetime) and dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            state.due_at = dt
 
         self._store.set_definition(definition)
         self._store.set_state(state)

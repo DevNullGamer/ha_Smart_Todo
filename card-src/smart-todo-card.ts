@@ -85,37 +85,53 @@ export class SmartTodoCard extends LitElement {
       z-index: 1;
     }
     .form-panel {
-      background: var(--card-background-color, white);
-      border-top: 1px solid var(--divider-color, #e0e0e0);
+      border-top: 1px solid var(--divider-color, rgba(255,255,255,0.12));
       padding: 16px 0 8px;
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 6px;
     }
     .form-title {
-      font-weight: 500;
+      font-weight: 600;
       font-size: 1rem;
-      margin-bottom: 8px;
+      margin-bottom: 4px;
       color: var(--primary-text-color);
     }
     .form-label {
-      font-size: 0.8rem;
+      font-size: 0.75rem;
+      font-weight: 500;
       color: var(--secondary-text-color);
-      margin-top: 8px;
+      margin-top: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
     }
     .form-input {
       width: 100%;
-      padding: 8px;
-      border: 1px solid var(--divider-color, #ccc);
-      border-radius: 4px;
-      background: var(--input-background-color, white);
-      color: var(--primary-text-color);
+      padding: 8px 10px;
+      border: 1px solid var(--divider-color, rgba(255,255,255,0.2));
+      border-radius: 6px;
+      background: var(--input-fill-color, rgba(255,255,255,0.08));
+      color: var(--primary-text-color, #e0e0e0);
       font-size: 0.9rem;
       box-sizing: border-box;
+      transition: border-color 0.15s;
+    }
+    .form-input:focus {
+      outline: none;
+      border-color: var(--primary-color, #0288d1);
+    }
+    .form-input::placeholder {
+      color: var(--secondary-text-color, rgba(255,255,255,0.5));
+      opacity: 0.8;
+    }
+    .form-input option {
+      background: var(--card-background-color, #1c1c1c);
+      color: var(--primary-text-color);
     }
     .form-hint {
       font-size: 0.8rem;
       color: var(--secondary-text-color);
+      margin-top: 2px;
     }
     .priority-buttons {
       display: flex;
@@ -227,6 +243,29 @@ export class SmartTodoCard extends LitElement {
     .task-row:last-child {
       border-bottom: none;
     }
+    .task-row.due-today-row {
+      background: rgba(255, 170, 0, 0.13);
+      border-radius: 6px;
+      margin: 2px -6px;
+      padding-left: 6px;
+      padding-right: 6px;
+      border-bottom-color: transparent;
+    }
+    .task-row.due-soon-row {
+      background: rgba(255, 170, 0, 0.05);
+      border-radius: 6px;
+      margin: 2px -6px;
+      padding-left: 6px;
+      padding-right: 6px;
+    }
+    .task-row.due-overdue-row {
+      background: rgba(219, 68, 55, 0.08);
+      border-radius: 6px;
+      margin: 2px -6px;
+      padding-left: 6px;
+      padding-right: 6px;
+      border-bottom-color: transparent;
+    }
     .task-priority {
       width: 4px;
       border-radius: 2px;
@@ -315,8 +354,8 @@ export class SmartTodoCard extends LitElement {
       background: var(--divider-color, #fbe9e7);
     }
     .snooze-popover {
-      background: var(--card-background-color, white);
-      border: 1px solid var(--divider-color, #e0e0e0);
+      background: var(--input-fill-color, rgba(255,255,255,0.08));
+      border: 1px solid var(--divider-color, rgba(255,255,255,0.12));
       border-radius: 6px;
       padding: 12px;
       margin: 4px 0 8px 14px;
@@ -391,17 +430,15 @@ export class SmartTodoCard extends LitElement {
   override render() {
     if (!this._config) return nothing;
 
-    const entity = this._hass?.states[this._config.entity];
-    const attrs = entity?.attributes ?? {};
-    const totalTasks = attrs['total_tasks'] as number | undefined;
-    const overdueCnt = attrs['overdue_count'] as number | undefined;
+    const totalTasks = this._tasks.length;
+    const overdueCnt = this._tasks.filter(t => t.overdue && !t.completed).length;
     const title = this._config.title ?? 'Smart Todo';
 
     return html`
       <ha-card>
         <div class="header">
           <span class="title">${title}</span>
-          ${totalTasks !== undefined
+          ${!this._loading
             ? html`<span class="summary">
                 ${totalTasks} task${totalTasks !== 1 ? 's' : ''}${overdueCnt ? html` · <span style="color:var(--error-color)">${overdueCnt} overdue</span>` : ''}
               </span>`
@@ -421,6 +458,14 @@ export class SmartTodoCard extends LitElement {
                   .slice()
                   .sort((a, b) => {
                     if (a.completed !== b.completed) return a.completed ? 1 : -1;
+                    const toMs = (s: string | null | undefined) => {
+                      if (!s) return Number.MAX_SAFE_INTEGER;
+                      const ms = new Date(s).getTime();
+                      return isNaN(ms) ? Number.MAX_SAFE_INTEGER : ms;
+                    };
+                    const aMs = toMs(a.due_at);
+                    const bMs = toMs(b.due_at);
+                    if (aMs !== bMs) return aMs < bMs ? -1 : 1;
                     return a.sort_order - b.sort_order;
                   })
                   .map(task => this._renderTask(task))}
@@ -693,6 +738,19 @@ export class SmartTodoCard extends LitElement {
       : parts[0].slice(0, 2).toUpperCase();
   }
 
+  private _dueClass(task: Task): string {
+    if (task.completed || !task.due_at) return '';
+    const due = new Date(task.due_at);
+    const today = new Date();
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+    const diffDays = Math.round((dueDay.getTime() - todayStart.getTime()) / 86400000);
+    if (diffDays < 0) return 'due-overdue-row';
+    if (diffDays === 0) return 'due-today-row';
+    if (diffDays <= 2) return 'due-soon-row';
+    return '';
+  }
+
   private _priorityColor(priority: number): string {
     if (priority === 3) return 'var(--error-color, #db4437)';
     if (priority === 2) return 'var(--primary-color, #0288d1)';
@@ -706,7 +764,7 @@ export class SmartTodoCard extends LitElement {
       new Date(task.snoozed_until) > new Date();
 
     return html`
-      <div class="task-row">
+      <div class="task-row ${this._dueClass(task)}">
         <div
           class="task-priority"
           style="background:${this._priorityColor(task.priority)}"

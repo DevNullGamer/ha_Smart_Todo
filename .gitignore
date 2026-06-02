@@ -37,3 +37,5 @@ card-src/node_modules/
 
 # Built card file — keep tracked (committed for end users)
 !custom_components/smart_todo/www/smart-todo-card.js
+AGENTS.md
+CLAUDE.md

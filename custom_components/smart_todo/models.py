@@ -5,6 +5,11 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time, timezone
 
 
+def _ensure_aware(dt: datetime) -> datetime:
+    """Return *dt* as a timezone-aware datetime, assuming UTC if naive."""
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+
+
 # ---------------------------------------------------------------------------
 # RecurrenceRule
 # ---------------------------------------------------------------------------
@@ -107,7 +112,7 @@ class TaskDefinition:
         return cls(
             id=data["id"],
             title=data["title"],
-            created_at=datetime.fromisoformat(data["created_at"]),
+            created_at=_ensure_aware(datetime.fromisoformat(data["created_at"])),
             notes=data.get("notes"),
             priority=data.get("priority", 2),
             assignee=data.get("assignee"),
@@ -143,10 +148,11 @@ class TaskRuntimeState:
         if self.completed or self.due_at is None:
             return False
         now_tz = datetime.now(timezone.utc)
-        if self.due_at >= now_tz:
+        due = _ensure_aware(self.due_at)
+        if due >= now_tz:
             return False
         # Still snoozed?
-        if self.snoozed_until is not None and self.snoozed_until >= now_tz:
+        if self.snoozed_until is not None and _ensure_aware(self.snoozed_until) >= now_tz:
             return False
         return True
 
@@ -177,7 +183,13 @@ class TaskRuntimeState:
         """Deserialise from a dict produced by :meth:`to_dict`."""
 
         def _parse_dt(value: str | None) -> datetime | None:
-            return datetime.fromisoformat(value) if value else None
+            if not value:
+                return None
+            dt = datetime.fromisoformat(value)
+            # Ensure tz-aware — assume UTC if the stored string had no offset
+            if dt.tzinfo is None:
+                return dt.replace(tzinfo=timezone.utc)
+            return dt
 
         return cls(
             id=data["id"],
