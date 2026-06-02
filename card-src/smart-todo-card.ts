@@ -108,13 +108,14 @@ export class SmartTodoCard extends LitElement {
     .form-input {
       width: 100%;
       padding: 8px 10px;
-      border: 1px solid var(--divider-color, rgba(255,255,255,0.2));
+      border: 1px solid var(--divider-color, rgba(255,255,255,0.25));
       border-radius: 6px;
-      background: var(--input-fill-color, rgba(255,255,255,0.08));
+      background-color: rgba(255,255,255,0.08);
       color: var(--primary-text-color, #e0e0e0);
       font-size: 0.9rem;
       box-sizing: border-box;
       transition: border-color 0.15s;
+      color-scheme: dark;
     }
     .form-input:focus {
       outline: none;
@@ -122,7 +123,7 @@ export class SmartTodoCard extends LitElement {
     }
     .form-input::placeholder {
       color: var(--secondary-text-color, rgba(255,255,255,0.5));
-      opacity: 0.8;
+      opacity: 0.85;
     }
     .form-input option {
       background: var(--card-background-color, #1c1c1c);
@@ -354,7 +355,7 @@ export class SmartTodoCard extends LitElement {
       background: var(--divider-color, #fbe9e7);
     }
     .snooze-popover {
-      background: var(--input-fill-color, rgba(255,255,255,0.08));
+      background-color: rgba(255,255,255,0.08);
       border: 1px solid var(--divider-color, rgba(255,255,255,0.12));
       border-radius: 6px;
       padding: 12px;
@@ -460,7 +461,8 @@ export class SmartTodoCard extends LitElement {
                     if (a.completed !== b.completed) return a.completed ? 1 : -1;
                     const toMs = (s: string | null | undefined) => {
                       if (!s) return Number.MAX_SAFE_INTEGER;
-                      const ms = new Date(s).getTime();
+                      // Truncate microseconds → milliseconds so all browsers parse correctly
+                      const ms = new Date(s.replace(/(\.\d{3})\d+/, '$1')).getTime();
                       return isNaN(ms) ? Number.MAX_SAFE_INTEGER : ms;
                     };
                     const aMs = toMs(a.due_at);

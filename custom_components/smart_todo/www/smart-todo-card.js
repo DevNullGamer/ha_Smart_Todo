@@ -12,7 +12,7 @@
         ${this._error?u`<div class="error">${this._error}</div>`:c}
 
         ${this._loading?u`<div class="loading">Loading tasks…</div>`:this._tasks.length===0?u`<div class="placeholder">No tasks yet — click + to add one.</div>`:u`<div class="task-list">
-                ${this._tasks.slice().sort((i,n)=>{if(i.completed!==n.completed)return i.completed?1:-1;let l=_=>{if(!_)return Number.MAX_SAFE_INTEGER;let p=new Date(_).getTime();return isNaN(p)?Number.MAX_SAFE_INTEGER:p},a=l(i.due_at),d=l(n.due_at);return a!==d?a<d?-1:1:i.sort_order-n.sort_order}).map(i=>this._renderTask(i))}
+                ${this._tasks.slice().sort((i,n)=>{if(i.completed!==n.completed)return i.completed?1:-1;let l=_=>{if(!_)return Number.MAX_SAFE_INTEGER;let p=new Date(_.replace(/(\.\d{3})\d+/,"$1")).getTime();return isNaN(p)?Number.MAX_SAFE_INTEGER:p},a=l(i.due_at),d=l(n.due_at);return a!==d?a<d?-1:1:i.sort_order-n.sort_order}).map(i=>this._renderTask(i))}
               </div>`}
 
         ${this._showForm?u`
@@ -207,13 +207,14 @@
     .form-input {
       width: 100%;
       padding: 8px 10px;
-      border: 1px solid var(--divider-color, rgba(255,255,255,0.2));
+      border: 1px solid var(--divider-color, rgba(255,255,255,0.25));
       border-radius: 6px;
-      background: var(--input-fill-color, rgba(255,255,255,0.08));
+      background-color: rgba(255,255,255,0.08);
       color: var(--primary-text-color, #e0e0e0);
       font-size: 0.9rem;
       box-sizing: border-box;
       transition: border-color 0.15s;
+      color-scheme: dark;
     }
     .form-input:focus {
       outline: none;
@@ -221,7 +222,7 @@
     }
     .form-input::placeholder {
       color: var(--secondary-text-color, rgba(255,255,255,0.5));
-      opacity: 0.8;
+      opacity: 0.85;
     }
     .form-input option {
       background: var(--card-background-color, #1c1c1c);
@@ -453,7 +454,7 @@
       background: var(--divider-color, #fbe9e7);
     }
     .snooze-popover {
-      background: var(--input-fill-color, rgba(255,255,255,0.08));
+      background-color: rgba(255,255,255,0.08);
       border: 1px solid var(--divider-color, rgba(255,255,255,0.12));
       border-radius: 6px;
       padding: 12px;

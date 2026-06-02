@@ -323,11 +323,11 @@ class SmartTodoCoordinator(
                     "priority": definition.priority,
                     "priority_label": PRIORITY_LABELS.get(definition.priority, "unknown"),
                     "assignee": definition.assignee,
-                    "due_at": state.due_at.isoformat() if state.due_at else None,
+                    "due_at": state.due_at.isoformat(timespec="seconds") if state.due_at else None,
                     "completed": state.completed,
                     "overdue": state.overdue,  # computed property — never stored
                     "snoozed_until": (
-                        state.snoozed_until.isoformat() if state.snoozed_until else None
+                        state.snoozed_until.isoformat(timespec="seconds") if state.snoozed_until else None
                     ),
                     "recurrence": (
                         describe_rule(definition.recurrence)
@@ -335,11 +335,11 @@ class SmartTodoCoordinator(
                         else None
                     ),
                     "last_completed_at": (
-                        state.last_completed_at.isoformat()
+                        state.last_completed_at.isoformat(timespec="seconds")
                         if state.last_completed_at
                         else None
                     ),
-                    "created_at": definition.created_at.isoformat(),
+                    "created_at": definition.created_at.isoformat(timespec="seconds"),
                     "sort_order": state.sort_order,
                 }
             )
