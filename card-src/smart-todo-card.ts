@@ -21,9 +21,128 @@ interface Hass {
   language: string;
 }
 
+type FilterMode =
+  | 'all'
+  | 'overdue'
+  | 'today'
+  | 'today_plus_overdue'
+  | 'x_days'
+  | 'x_days_plus_overdue';
+
 interface SmartTodoCardConfig {
   entity: string;
   title?: string;
+  filter?: FilterMode;
+  filter_days?: number;
+}
+
+@customElement('smart-todo-card-editor')
+class SmartTodoCardEditor extends LitElement {
+  @state() private _config: SmartTodoCardConfig = { entity: '' };
+
+  set hass(_hass: Hass) { /* no-op — entity picker not used */ }
+
+  setConfig(config: SmartTodoCardConfig): void {
+    this._config = { ...config };
+  }
+
+  private _valueChanged(field: keyof SmartTodoCardConfig, value: unknown): void {
+    const updated = { ...this._config, [field]: value } as SmartTodoCardConfig;
+    if (updated.filter !== 'x_days' && updated.filter !== 'x_days_plus_overdue') {
+      delete updated.filter_days;
+    }
+    this.dispatchEvent(new CustomEvent('config-changed', {
+      detail: { config: updated },
+      bubbles: true,
+      composed: true,
+    }));
+  }
+
+  static override styles = css`
+    .editor-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: 12px;
+    }
+    .editor-label {
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--secondary-text-color);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .editor-input {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid var(--divider-color, rgba(0,0,0,0.12));
+      border-radius: 6px;
+      background: var(--card-background-color, #fff);
+      color: var(--primary-text-color);
+      font-size: 0.9rem;
+      box-sizing: border-box;
+    }
+    .editor-input:focus {
+      outline: none;
+      border-color: var(--primary-color, #0288d1);
+    }
+    .editor-hint {
+      font-size: 0.75rem;
+      color: var(--secondary-text-color);
+    }
+  `;
+
+  override render() {
+    const filter = this._config.filter ?? 'all';
+    const showDays = filter === 'x_days' || filter === 'x_days_plus_overdue';
+
+    return html`
+      <div class="editor-row">
+        <label class="editor-label">Entity *</label>
+        <input class="editor-input" type="text"
+          .value=${this._config.entity}
+          placeholder="smart_todo.tasks"
+          @input=${(e: Event) =>
+            this._valueChanged('entity', (e.target as HTMLInputElement).value)} />
+        <span class="editor-hint">The smart_todo sensor entity ID</span>
+      </div>
+
+      <div class="editor-row">
+        <label class="editor-label">Title</label>
+        <input class="editor-input" type="text"
+          .value=${this._config.title ?? ''}
+          placeholder="Smart Todo"
+          @input=${(e: Event) =>
+            this._valueChanged('title', (e.target as HTMLInputElement).value || undefined)} />
+      </div>
+
+      <div class="editor-row">
+        <label class="editor-label">Show tasks</label>
+        <select class="editor-input"
+          .value=${filter}
+          @change=${(e: Event) =>
+            this._valueChanged('filter', (e.target as HTMLSelectElement).value as FilterMode)}>
+          <option value="all">All tasks</option>
+          <option value="overdue">Only overdue</option>
+          <option value="today">Only today</option>
+          <option value="today_plus_overdue">Today + overdue</option>
+          <option value="x_days">Within X days</option>
+          <option value="x_days_plus_overdue">Within X days + overdue</option>
+        </select>
+      </div>
+
+      ${showDays ? html`
+        <div class="editor-row">
+          <label class="editor-label">Days (X)</label>
+          <input class="editor-input" type="number" min="1" max="365"
+            .value=${String(this._config.filter_days ?? 7)}
+            @input=${(e: Event) =>
+              this._valueChanged('filter_days', parseInt((e.target as HTMLInputElement).value) || 7)} />
+          <span class="editor-hint">Show tasks due within this many days from today</span>
+        </div>
+      ` : nothing}
+    `;
+  }
 }
 
 @customElement('smart-todo-card')
@@ -372,6 +491,14 @@ export class SmartTodoCard extends LitElement {
     .snooze-time { flex: 1; }
   `;
 
+  static getConfigElement(): HTMLElement {
+    return document.createElement('smart-todo-card-editor');
+  }
+
+  static getStubConfig(): SmartTodoCardConfig {
+    return { entity: '', filter: 'all' };
+  }
+
   setConfig(config: SmartTodoCardConfig): void {
     if (!config.entity) {
       throw new Error('smart-todo-card: "entity" is required in card config.');
@@ -428,11 +555,47 @@ export class SmartTodoCard extends LitElement {
     }
   }
 
+  private _getFilteredTasks(): Task[] {
+    const mode = this._config?.filter ?? 'all';
+    if (mode === 'all') return this._tasks;
+
+    const today = new Date();
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const days = this._config?.filter_days ?? 7;
+
+    return this._tasks.filter(task => {
+      if (task.completed) return false;
+
+      const isOverdue = task.overdue === true;
+
+      if (mode === 'overdue') return isOverdue;
+
+      let diffDays = Infinity;
+      if (task.due_at) {
+        const due = new Date(task.due_at.replace(/(\.\d{3})\d+/, '$1'));
+        const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+        diffDays = Math.round((dueDay.getTime() - todayStart.getTime()) / 86400000);
+      }
+
+      const isToday = diffDays === 0;
+      const inWindow = diffDays >= 0 && diffDays <= days;
+
+      switch (mode) {
+        case 'today':                return isToday && !isOverdue;
+        case 'today_plus_overdue':   return isToday || isOverdue;
+        case 'x_days':               return inWindow && !isOverdue;
+        case 'x_days_plus_overdue':  return inWindow || isOverdue;
+        default:                     return true;
+      }
+    });
+  }
+
   override render() {
     if (!this._config) return nothing;
 
-    const totalTasks = this._tasks.length;
-    const overdueCnt = this._tasks.filter(t => t.overdue && !t.completed).length;
+    const filtered = this._getFilteredTasks();
+    const totalTasks = filtered.length;
+    const overdueCnt = filtered.filter(t => t.overdue && !t.completed).length;
     const title = this._config.title ?? 'Smart Todo';
 
     return html`
@@ -454,10 +617,12 @@ export class SmartTodoCard extends LitElement {
           ? html`<div class="loading">Loading tasks…</div>`
           : this._tasks.length === 0
             ? html`<div class="placeholder">No tasks yet — click + to add one.</div>`
-            : html`<div class="task-list">
-                ${this._tasks
-                  .slice()
-                  .sort((a, b) => {
+            : filtered.length === 0
+              ? html`<div class="placeholder">No tasks match the current filter.</div>`
+              : html`<div class="task-list">
+                  ${filtered
+                    .slice()
+                    .sort((a, b) => {
                     if (a.completed !== b.completed) return a.completed ? 1 : -1;
                     const toMs = (s: string | null | undefined) => {
                       if (!s) return Number.MAX_SAFE_INTEGER;
@@ -859,5 +1024,5 @@ window.customCards.push({
   type: 'smart-todo-card',
   name: 'Smart Todo',
   description: 'Manage your Smart Todo recurring tasks.',
-  preview: false,
+  preview: true,
 });
