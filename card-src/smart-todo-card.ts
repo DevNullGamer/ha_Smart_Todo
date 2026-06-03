@@ -555,16 +555,25 @@ export class SmartTodoCard extends LitElement {
     }
   }
 
+  private _isCompletedToday(task: Task): boolean {
+    if (!task.last_completed_at) return false;
+    const t = new Date(task.last_completed_at.replace(/(\.\d{3})\d+/, '$1'));
+    const n = new Date();
+    return t.getFullYear() === n.getFullYear()
+      && t.getMonth() === n.getMonth()
+      && t.getDate() === n.getDate();
+  }
+
   private _getFilteredTasks(): Task[] {
     const mode = this._config?.filter ?? 'all';
-    if (mode === 'all') return this._tasks;
+    if (mode === 'all') return this._tasks.filter(t => !this._isCompletedToday(t));
 
     const today = new Date();
     const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const days = this._config?.filter_days ?? 7;
 
     return this._tasks.filter(task => {
-      if (task.completed) return false;
+      if (task.completed || this._isCompletedToday(task)) return false;
 
       const isOverdue = task.overdue === true;
 
