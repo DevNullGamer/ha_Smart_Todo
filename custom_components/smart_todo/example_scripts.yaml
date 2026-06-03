@@ -1,0 +1,408 @@
+# Smart Todo — Example Scripts
+# Copy and paste these into your scripts.yaml or the Script Editor in Home Assistant.
+#
+# These scripts wrap common smart_todo.create_task patterns so you can call them
+# from the UI, dashboards, automations, or other scripts without repeating
+# boilerplate recurrence data each time.
+#
+# Requirements:
+#   - Home Assistant 2023.5 or later (required for response_variable support in Script 6)
+#   - Smart Todo integration installed and configured
+#
+# Usage:
+#   1. Open Settings → Automations & Scenes → Scripts → Add Script → Edit in YAML.
+#   2. Paste the desired script block and save.
+#   3. The script will appear in the Scripts list and can be called via
+#      service: script.<script_id> or from the Developer Tools → Services panel.
+
+smart_todo_create_task:
+  alias: Smart Todo – Create task
+  icon: mdi:checkbox-marked-circle-outline
+  description: >
+    Create a one-off Smart Todo task with an optional due date, priority, and assignee.
+  fields:
+    title:
+      name: Title
+      description: Task title (required).
+      required: true
+      selector:
+        text:
+    due_date:
+      name: Due date
+      description: Optional due date. The task will be due at midnight on this day.
+      required: false
+      selector:
+        date:
+    priority:
+      name: Priority
+      description: "1 = low, 2 = medium (default), 3 = high."
+      required: false
+      default: 2
+      selector:
+        number:
+          min: 1
+          max: 3
+          mode: box
+    assignee:
+      name: Assignee
+      description: Optional name to assign the task to.
+      required: false
+      selector:
+        text:
+  sequence:
+    # R1: Assemble the full ISO-8601 datetime string when a date is provided.
+    - variables:
+        due_at: >
+          {% if due_date is defined and due_date %}
+            {{ due_date }}T00:00:00
+          {% else %}
+            {{ None }}
+          {% endif %}
+    - choose:
+        # Path A — due_at and assignee both provided
+        - conditions: "{{ due_at is not none and assignee is defined and assignee }}"
+          sequence:
+            - service: smart_todo.create_task
+              data:
+                title: "{{ title }}"
+                due_at: "{{ due_at }}"
+                priority: "{{ priority | default(2) }}"
+                assignee: "{{ assignee }}"
+        # Path B — due_at provided, no assignee
+        - conditions: "{{ due_at is not none }}"
+          sequence:
+            - service: smart_todo.create_task
+              data:
+                title: "{{ title }}"
+                due_at: "{{ due_at }}"
+                priority: "{{ priority | default(2) }}"
+        # Path C — assignee provided, no due_at
+        - conditions: "{{ assignee is defined and assignee }}"
+          sequence:
+            - service: smart_todo.create_task
+              data:
+                title: "{{ title }}"
+                priority: "{{ priority | default(2) }}"
+                assignee: "{{ assignee }}"
+      # Path D — neither due_at nor assignee
+      default:
+        - service: smart_todo.create_task
+          data:
+            title: "{{ title }}"
+            priority: "{{ priority | default(2) }}"
+
+smart_todo_create_daily_task:
+  alias: Smart Todo – Create daily task
+  icon: mdi:checkbox-marked-circle-outline
+  description: >
+    Create a Smart Todo task that recurs every day using the interval_days recurrence mode.
+    Note: interval_days mode does not support a time-of-day; the task will be due at the
+    integration's default time each day.
+  fields:
+    title:
+      name: Title
+      description: Task title (required).
+      required: true
+      selector:
+        text:
+    priority:
+      name: Priority
+      description: "1 = low, 2 = medium (default), 3 = high."
+      required: false
+      default: 2
+      selector:
+        number:
+          min: 1
+          max: 3
+          mode: box
+    assignee:
+      name: Assignee
+      description: Optional name to assign the task to.
+      required: false
+      selector:
+        text:
+  sequence:
+    # R2: No hour/time_of_day field — interval_days mode ignores time_of_day entirely.
+    - choose:
+        - conditions: "{{ assignee is defined and assignee }}"
+          sequence:
+            - service: smart_todo.create_task
+              data:
+                title: "{{ title }}"
+                priority: "{{ priority | default(2) }}"
+                assignee: "{{ assignee }}"
+                recurrence:
+                  mode: interval_days
+                  interval_days: 1
+      default:
+        - service: smart_todo.create_task
+          data:
+            title: "{{ title }}"
+            priority: "{{ priority | default(2) }}"
+            recurrence:
+              mode: interval_days
+              interval_days: 1
+
+smart_todo_create_weekly_task:
+  alias: Smart Todo – Create weekly task
+  icon: mdi:checkbox-marked-circle-outline
+  description: >
+    Create a Smart Todo task that recurs on a chosen weekday at a chosen hour each week.
+  fields:
+    title:
+      name: Title
+      description: Task title (required).
+      required: true
+      selector:
+        text:
+    weekday:
+      name: Weekday
+      description: "Day of the week to recur on. 0 = Monday … 6 = Sunday."
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 6
+          mode: box
+    hour:
+      name: Hour
+      description: "Hour of the day the task becomes due (0–23, default 8)."
+      required: true
+      default: 8
+      selector:
+        number:
+          min: 0
+          max: 23
+          mode: box
+    priority:
+      name: Priority
+      description: "1 = low, 2 = medium (default), 3 = high."
+      required: false
+      default: 2
+      selector:
+        number:
+          min: 1
+          max: 3
+          mode: box
+    assignee:
+      name: Assignee
+      description: Optional name to assign the task to.
+      required: false
+      selector:
+        text:
+  sequence:
+    - choose:
+        - conditions: "{{ assignee is defined and assignee }}"
+          sequence:
+            - service: smart_todo.create_task
+              data:
+                title: "{{ title }}"
+                priority: "{{ priority | default(2) }}"
+                assignee: "{{ assignee }}"
+                recurrence:
+                  mode: weekly
+                  # R3: weekdays must be a list — wrap the single weekday input.
+                  weekdays: "{{ [weekday] }}"
+                  # R3: time_of_day must be zero-padded HH:MM:SS.
+                  time_of_day: "{{ '%02d' % hour }}:00:00"
+      default:
+        - service: smart_todo.create_task
+          data:
+            title: "{{ title }}"
+            priority: "{{ priority | default(2) }}"
+            recurrence:
+              mode: weekly
+              # R3: weekdays must be a list — wrap the single weekday input.
+              weekdays: "{{ [weekday] }}"
+              # R3: time_of_day must be zero-padded HH:MM:SS.
+              time_of_day: "{{ '%02d' % hour }}:00:00"
+
+smart_todo_create_interval_task:
+  alias: Smart Todo – Create every-N-days task
+  icon: mdi:checkbox-marked-circle-outline
+  description: >
+    Create a Smart Todo task that recurs every N days. An optional due date sets
+    the initial anchor from which recurrence is calculated.
+  fields:
+    title:
+      name: Title
+      description: Task title (required).
+      required: true
+      selector:
+        text:
+    interval_days:
+      name: Interval (days)
+      description: Number of days between recurrences (1–365).
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 365
+          mode: box
+    due_date:
+      name: Initial due date
+      description: Optional. Sets the starting anchor for the recurrence cycle.
+      required: false
+      selector:
+        date:
+    priority:
+      name: Priority
+      description: "1 = low, 2 = medium (default), 3 = high."
+      required: false
+      default: 2
+      selector:
+        number:
+          min: 1
+          max: 3
+          mode: box
+    assignee:
+      name: Assignee
+      description: Optional name to assign the task to.
+      required: false
+      selector:
+        text:
+  sequence:
+    # R1: Assemble the full ISO-8601 datetime string when a date is provided.
+    - variables:
+        due_at: >
+          {% if due_date is defined and due_date %}
+            {{ due_date }}T00:00:00
+          {% else %}
+            {{ None }}
+          {% endif %}
+    - choose:
+        # Path A — due_at and assignee both provided
+        - conditions: "{{ due_at is not none and assignee is defined and assignee }}"
+          sequence:
+            - service: smart_todo.create_task
+              data:
+                title: "{{ title }}"
+                due_at: "{{ due_at }}"
+                priority: "{{ priority | default(2) }}"
+                assignee: "{{ assignee }}"
+                recurrence:
+                  mode: interval_days
+                  interval_days: "{{ interval_days }}"
+        # Path B — due_at provided, no assignee
+        - conditions: "{{ due_at is not none }}"
+          sequence:
+            - service: smart_todo.create_task
+              data:
+                title: "{{ title }}"
+                due_at: "{{ due_at }}"
+                priority: "{{ priority | default(2) }}"
+                recurrence:
+                  mode: interval_days
+                  interval_days: "{{ interval_days }}"
+        # Path C — assignee provided, no due_at
+        - conditions: "{{ assignee is defined and assignee }}"
+          sequence:
+            - service: smart_todo.create_task
+              data:
+                title: "{{ title }}"
+                priority: "{{ priority | default(2) }}"
+                assignee: "{{ assignee }}"
+                recurrence:
+                  mode: interval_days
+                  interval_days: "{{ interval_days }}"
+      # Path D — neither due_at nor assignee
+      default:
+        - service: smart_todo.create_task
+          data:
+            title: "{{ title }}"
+            priority: "{{ priority | default(2) }}"
+            recurrence:
+              mode: interval_days
+              interval_days: "{{ interval_days }}"
+
+smart_todo_create_rolling_task:
+  alias: Smart Todo – Create rolling task
+  icon: mdi:checkbox-marked-circle-outline
+  description: >
+    Create a Smart Todo task that recurs N days after each completion (rolling recurrence).
+    Unlike interval_days, the next due date is calculated from when the task was completed,
+    not from the previous due date.
+  fields:
+    title:
+      name: Title
+      description: Task title (required).
+      required: true
+      selector:
+        text:
+    interval_days:
+      name: Days after completion
+      description: Number of days after completion before the task recurs (1–365).
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 365
+          mode: box
+    priority:
+      name: Priority
+      description: "1 = low, 2 = medium (default), 3 = high."
+      required: false
+      default: 2
+      selector:
+        number:
+          min: 1
+          max: 3
+          mode: box
+    assignee:
+      name: Assignee
+      description: Optional name to assign the task to.
+      required: false
+      selector:
+        text:
+  sequence:
+    - choose:
+        - conditions: "{{ assignee is defined and assignee }}"
+          sequence:
+            - service: smart_todo.create_task
+              data:
+                title: "{{ title }}"
+                priority: "{{ priority | default(2) }}"
+                assignee: "{{ assignee }}"
+                recurrence:
+                  mode: rolling_days
+                  interval_days: "{{ interval_days }}"
+      default:
+        - service: smart_todo.create_task
+          data:
+            title: "{{ title }}"
+            priority: "{{ priority | default(2) }}"
+            recurrence:
+              mode: rolling_days
+              interval_days: "{{ interval_days }}"
+
+smart_todo_complete_by_title:
+  alias: Smart Todo – Complete task by title
+  icon: mdi:checkbox-marked-circle-outline
+  description: >
+    Find a task by a partial, case-insensitive title match and mark it as complete.
+    If no matching task is found, a persistent notification is created.
+    Requires Home Assistant 2023.5 or later (response_variable support).
+  fields:
+    title_fragment:
+      name: Title fragment
+      description: Partial title to search for (case-insensitive). The first matching task will be completed.
+      required: true
+      selector:
+        text:
+  sequence:
+    - service: smart_todo.get_tasks
+      response_variable: result
+    - variables:
+        matched_task: >
+          {{ (result.tasks | selectattr('title', 'search', title_fragment, ignorecase=True) | list | first | default({})) }}
+    - choose:
+        - conditions: "{{ matched_task.id is defined }}"
+          sequence:
+            - service: smart_todo.complete_task
+              data:
+                task_id: "{{ matched_task.id }}"
+      default:
+        - service: persistent_notification.create
+          data:
+            title: Smart Todo
+            message: "No task matching '{{ title_fragment }}' was found."

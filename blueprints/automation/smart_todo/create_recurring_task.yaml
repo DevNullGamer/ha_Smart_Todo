@@ -1,0 +1,202 @@
+blueprint:
+  name: Smart Todo – Create Recurring Task
+  description: >
+    Creates a Smart Todo task on a schedule. Configure the task title,
+    recurrence type, timing, priority, and assignee from the Blueprints UI.
+  domain: automation
+  input:
+    task_title:
+      name: Task title
+      description: Title of the task to create (required).
+      selector:
+        text:
+    recurrence_type:
+      name: Recurrence type
+      description: >
+        The recurrence pattern to use.
+        daily = every day (interval 1);
+        weekly = a specific weekday at a specific hour;
+        every_n_days = fixed interval of N days;
+        rolling = N days after each completion.
+      default: daily
+      selector:
+        select:
+          options:
+            - daily
+            - weekly
+            - every_n_days
+            - rolling
+    weekday:
+      name: Weekday (weekly only)
+      description: "Day of the week to recur on when recurrence_type is 'weekly'. 0 = Monday … 6 = Sunday."
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 6
+          mode: box
+    hour:
+      name: Hour of day (weekly only)
+      description: "Hour at which the weekly task becomes due (0–23). Only used when recurrence_type is 'weekly'."
+      default: 8
+      selector:
+        number:
+          min: 0
+          max: 23
+          mode: box
+    interval_days:
+      name: Interval days (every_n_days / rolling)
+      description: "Number of days between recurrences (1–365). Used by 'every_n_days' and 'rolling' types."
+      default: 7
+      selector:
+        number:
+          min: 1
+          max: 365
+          mode: box
+    priority:
+      name: Priority
+      description: "Task priority. 1 = Low, 2 = Medium, 3 = High."
+      default: "2"
+      selector:
+        select:
+          options:
+            - "1"
+            - "2"
+            - "3"
+    assignee:
+      name: Assignee
+      description: "Optional. Name of the person to assign this task to. Leave blank to omit."
+      default: ""
+      selector:
+        text:
+    trigger_time:
+      name: Trigger time
+      description: "Time of day this automation runs and creates the task."
+      default: "06:00:00"
+      selector:
+        time:
+
+trigger:
+  - platform: time
+    at: !input trigger_time
+
+variables:
+  recurrence_type: !input recurrence_type
+  weekday: !input weekday
+  hour: !input hour
+  interval_days: !input interval_days
+  priority: !input priority
+  assignee: !input assignee
+  task_title: !input task_title
+
+action:
+  - choose:
+      # Branch 1 — daily
+      - conditions:
+          - condition: template
+            value_template: "{{ recurrence_type == 'daily' }}"
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ assignee | string | trim != '' }}"
+                sequence:
+                  - service: smart_todo.create_task
+                    data:
+                      title: "{{ task_title }}"
+                      priority: "{{ priority | int }}"
+                      assignee: "{{ assignee }}"
+                      recurrence:
+                        mode: interval_days
+                        interval_days: 1
+            default:
+              - service: smart_todo.create_task
+                data:
+                  title: "{{ task_title }}"
+                  priority: "{{ priority | int }}"
+                  recurrence:
+                    mode: interval_days
+                    interval_days: 1
+
+      # Branch 2 — weekly
+      - conditions:
+          - condition: template
+            value_template: "{{ recurrence_type == 'weekly' }}"
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ assignee | string | trim != '' }}"
+                sequence:
+                  - service: smart_todo.create_task
+                    data:
+                      title: "{{ task_title }}"
+                      priority: "{{ priority | int }}"
+                      assignee: "{{ assignee }}"
+                      recurrence:
+                        mode: weekly
+                        weekdays: "{{ [weekday | int] }}"
+                        time_of_day: "{{ '%02d' % (hour | int) }}:00:00"
+            default:
+              - service: smart_todo.create_task
+                data:
+                  title: "{{ task_title }}"
+                  priority: "{{ priority | int }}"
+                  recurrence:
+                    mode: weekly
+                    weekdays: "{{ [weekday | int] }}"
+                    time_of_day: "{{ '%02d' % (hour | int) }}:00:00"
+
+      # Branch 3 — every_n_days
+      - conditions:
+          - condition: template
+            value_template: "{{ recurrence_type == 'every_n_days' }}"
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ assignee | string | trim != '' }}"
+                sequence:
+                  - service: smart_todo.create_task
+                    data:
+                      title: "{{ task_title }}"
+                      priority: "{{ priority | int }}"
+                      assignee: "{{ assignee }}"
+                      recurrence:
+                        mode: interval_days
+                        interval_days: "{{ interval_days | int }}"
+            default:
+              - service: smart_todo.create_task
+                data:
+                  title: "{{ task_title }}"
+                  priority: "{{ priority | int }}"
+                  recurrence:
+                    mode: interval_days
+                    interval_days: "{{ interval_days | int }}"
+
+      # Branch 4 — rolling
+      - conditions:
+          - condition: template
+            value_template: "{{ recurrence_type == 'rolling' }}"
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ assignee | string | trim != '' }}"
+                sequence:
+                  - service: smart_todo.create_task
+                    data:
+                      title: "{{ task_title }}"
+                      priority: "{{ priority | int }}"
+                      assignee: "{{ assignee }}"
+                      recurrence:
+                        mode: rolling_days
+                        interval_days: "{{ interval_days | int }}"
+            default:
+              - service: smart_todo.create_task
+                data:
+                  title: "{{ task_title }}"
+                  priority: "{{ priority | int }}"
+                  recurrence:
+                    mode: rolling_days
+                    interval_days: "{{ interval_days | int }}"

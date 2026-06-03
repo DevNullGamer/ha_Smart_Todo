@@ -109,3 +109,123 @@ See `custom_components/smart_todo/example_dashboard.yaml` for a ready-to-use das
 ## License
 
 MIT
+
+## Script Wrappers
+
+Pre-built scripts are included in `custom_components/smart_todo/example_scripts.yaml`. They wrap common `smart_todo.create_task` patterns so you can trigger task creation from dashboards, automations, or the Developer Tools without repeating boilerplate recurrence data each time.
+
+> **Requirement:** Home Assistant 2023.5 or later (`response_variable` support is required for `smart_todo_complete_by_title`).
+
+### How to install the scripts
+
+**Option A — configuration.yaml**
+
+Copy the contents of `custom_components/smart_todo/example_scripts.yaml` into your `configuration.yaml` under a top-level `script:` key (or into a separate `scripts.yaml` file if you use `script: !include scripts.yaml`), then reload scripts:
+
+```yaml
+# configuration.yaml
+script: !include scripts.yaml
+```
+
+**Option B — HA Scripts UI**
+
+1. Go to **Settings → Automations & Scenes → Scripts**
+2. Click **Add Script → Edit in YAML**
+3. Paste the desired script block and save
+4. Repeat for each script you want
+
+After adding scripts, go to **Developer Tools → YAML → Reload Scripts** (or restart HA).
+
+### Script examples
+
+Each script can be called from **Developer Tools → Services** by selecting `script.<script_key>` and filling in the fields shown below.
+
+#### `smart_todo_create_task` — one-off task
+
+Fields: `title`, `due_date`, `priority`, `assignee`
+
+```yaml
+service: script.smart_todo_create_task
+data:
+  title: Buy groceries
+  due_date: "2026-06-10"
+  priority: 2
+  assignee: Alice
+```
+
+#### `smart_todo_create_daily_task` — daily recurring task
+
+Fields: `title`, `priority`, `assignee`
+
+```yaml
+service: script.smart_todo_create_daily_task
+data:
+  title: Check morning messages
+  priority: 2
+  assignee: Alice
+```
+
+#### `smart_todo_create_weekly_task` — weekly recurring task
+
+Fields: `title`, `weekday` (0 = Monday … 6 = Sunday), `hour` (0–23), `priority`, `assignee`
+
+```yaml
+service: script.smart_todo_create_weekly_task
+data:
+  title: Water the plants
+  weekday: 4   # Friday
+  hour: 8
+  priority: 1
+  assignee: Bob
+```
+
+#### `smart_todo_create_interval_task` — every N days
+
+Fields: `title`, `interval_days`, `due_date`, `priority`, `assignee`
+
+```yaml
+service: script.smart_todo_create_interval_task
+data:
+  title: Change air filter
+  interval_days: 30
+  due_date: "2026-07-01"
+  priority: 2
+```
+
+#### `smart_todo_create_rolling_task` — N days after completion
+
+Fields: `title`, `interval_days`, `priority`, `assignee`
+
+```yaml
+service: script.smart_todo_create_rolling_task
+data:
+  title: Clean the fridge
+  interval_days: 14
+  priority: 2
+  assignee: Alice
+```
+
+#### `smart_todo_complete_by_title` — complete by title fragment
+
+Fields: `title_fragment`
+
+```yaml
+service: script.smart_todo_complete_by_title
+data:
+  title_fragment: groceries
+```
+
+The script performs a case-insensitive partial match and completes the first task found. If no match is found, a persistent notification is created.
+
+### Blueprint install instructions
+
+A blueprint is included at `blueprints/automation/smart_todo/create_recurring_task.yaml`.
+
+1. Copy the file to your HA config directory:
+   ```
+   config/blueprints/automation/smart_todo/create_recurring_task.yaml
+   ```
+2. In Home Assistant go to **Settings → Automations & Scenes → Blueprints**
+3. Find **"Create Recurring Task"** and click **Create Automation**
+
+The blueprint accepts inputs for task title, recurrence mode (daily, weekly, interval, or rolling), weekday, hour, interval days, priority, and assignee. It generates the appropriate `smart_todo.create_task` service call automatically.
