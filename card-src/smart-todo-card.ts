@@ -608,9 +608,12 @@ export class SmartTodoCard extends LitElement {
 
       if (mode === 'overdue') return isOverdue;
 
+      const isSnoozed = task.snoozed_until != null && new Date(task.snoozed_until) > new Date();
+      const effectiveDueStr = isSnoozed ? task.snoozed_until! : task.due_at;
+
       let diffDays = Infinity;
-      if (task.due_at) {
-        const due = new Date(task.due_at.replace(/(\.\d{3})\d+/, '$1'));
+      if (effectiveDueStr) {
+        const due = new Date(effectiveDueStr.replace(/(\.\d{3})\d+/, '$1'));
         const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
         diffDays = Math.round((dueDay.getTime() - todayStart.getTime()) / 86400000);
       }
@@ -990,8 +993,11 @@ export class SmartTodoCard extends LitElement {
   }
 
   private _dueClass(task: Task): string {
-    if (task.completed || !task.due_at) return '';
-    const due = new Date(task.due_at);
+    if (task.completed) return '';
+    const isSnoozed = task.snoozed_until != null && new Date(task.snoozed_until) > new Date();
+    const effectiveDue = isSnoozed ? task.snoozed_until! : task.due_at;
+    if (!effectiveDue) return '';
+    const due = new Date(effectiveDue);
     const today = new Date();
     const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
@@ -1009,10 +1015,11 @@ export class SmartTodoCard extends LitElement {
   }
 
   private _renderTask(task: Task) {
-    const due = task.due_at ? this._formatDue(task.due_at) : null;
     const isSnoozed =
       task.snoozed_until != null &&
       new Date(task.snoozed_until) > new Date();
+    const effectiveDueStr = isSnoozed ? task.snoozed_until! : task.due_at;
+    const due = effectiveDueStr ? this._formatDue(effectiveDueStr) : null;
 
     return html`
       <div class="task-row ${this._dueClass(task)}">
