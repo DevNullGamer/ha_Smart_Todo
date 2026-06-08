@@ -172,6 +172,7 @@ export class SmartTodoCard extends LitElement {
   @state() private _snoozeTaskId?: string;
   @state() private _snoozeDate = '';
   @state() private _snoozeTime = '08:00';
+  @state() private _showHidden = false;
 
   private _lastUpdated?: string;
   private _debounceTimer?: ReturnType<typeof setTimeout>;
@@ -489,6 +490,32 @@ export class SmartTodoCard extends LitElement {
     }
     .snooze-date { flex: 2; }
     .snooze-time { flex: 1; }
+    .filter-expand-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 8px 0 4px;
+      font-size: 0.8rem;
+      color: var(--secondary-text-color);
+      display: block;
+      text-align: center;
+      width: 100%;
+      opacity: 0.75;
+    }
+    .filter-expand-btn:hover {
+      opacity: 1;
+      color: var(--primary-text-color);
+    }
+    .hidden-divider {
+      font-size: 0.7rem;
+      color: var(--secondary-text-color);
+      text-align: center;
+      padding: 6px 0 4px;
+      opacity: 0.6;
+    }
+    .filtered-hidden-wrapper {
+      opacity: 0.45;
+    }
   `;
 
   static getConfigElement(): HTMLElement {
@@ -504,6 +531,7 @@ export class SmartTodoCard extends LitElement {
       throw new Error('smart-todo-card: "entity" is required in card config.');
     }
     this._config = config;
+    this._showHidden = false;
   }
 
   set hass(hass: Hass) {
@@ -599,10 +627,29 @@ export class SmartTodoCard extends LitElement {
     });
   }
 
+  private _sortTasks(tasks: Task[]): Task[] {
+    return tasks.slice().sort((a, b) => {
+      if (a.completed !== b.completed) return a.completed ? 1 : -1;
+      const toMs = (s: string | null | undefined) => {
+        if (!s) return Number.MAX_SAFE_INTEGER;
+        const ms = new Date(s.replace(/(\.\d{3})\d+/, '$1')).getTime();
+        return isNaN(ms) ? Number.MAX_SAFE_INTEGER : ms;
+      };
+      const aMs = toMs(a.due_at);
+      const bMs = toMs(b.due_at);
+      if (aMs !== bMs) return aMs < bMs ? -1 : 1;
+      return a.sort_order - b.sort_order;
+    });
+  }
+
   override render() {
     if (!this._config) return nothing;
 
     const filtered = this._getFilteredTasks();
+    const mode = this._config.filter ?? 'all';
+    const filteredIds = new Set(filtered.map(t => t.id));
+    const hidden = mode === 'all' ? [] : this._tasks.filter(t => !filteredIds.has(t.id));
+    const hasHidden = hidden.length > 0;
     const totalTasks = filtered.length;
     const overdueCnt = filtered.filter(t => t.overdue && !t.completed).length;
     const title = this._config.title ?? 'Smart Todo';
@@ -627,25 +674,50 @@ export class SmartTodoCard extends LitElement {
           : this._tasks.length === 0
             ? html`<div class="placeholder">No tasks yet — click + to add one.</div>`
             : filtered.length === 0
-              ? html`<div class="placeholder">No tasks match the current filter.</div>`
-              : html`<div class="task-list">
-                  ${filtered
-                    .slice()
-                    .sort((a, b) => {
-                    if (a.completed !== b.completed) return a.completed ? 1 : -1;
-                    const toMs = (s: string | null | undefined) => {
-                      if (!s) return Number.MAX_SAFE_INTEGER;
-                      // Truncate microseconds → milliseconds so all browsers parse correctly
-                      const ms = new Date(s.replace(/(\.\d{3})\d+/, '$1')).getTime();
-                      return isNaN(ms) ? Number.MAX_SAFE_INTEGER : ms;
-                    };
-                    const aMs = toMs(a.due_at);
-                    const bMs = toMs(b.due_at);
-                    if (aMs !== bMs) return aMs < bMs ? -1 : 1;
-                    return a.sort_order - b.sort_order;
-                  })
-                  .map(task => this._renderTask(task))}
-              </div>`}
+              ? html`<div class="placeholder">
+                  No tasks match the current filter.
+                  ${hasHidden ? html`<br>
+                    <button class="filter-expand-btn"
+                      @click=${() => { this._showHidden = !this._showHidden; }}>
+                      ${this._showHidden
+                        ? `▲ Hide ${hidden.length} filtered task${hidden.length !== 1 ? 's' : ''}`
+                        : `▼ Show ${hidden.length} filtered task${hidden.length !== 1 ? 's' : ''}`}
+                    </button>
+                    ${this._showHidden ? html`
+                      <div class="hidden-divider">Hidden by filter</div>
+                      <div class="task-list">
+                        ${this._sortTasks(hidden).map(task => html`
+                          <div class="filtered-hidden-wrapper">
+                            ${this._renderTask(task)}
+                          </div>
+                        `)}
+                      </div>
+                    ` : nothing}
+                  ` : nothing}
+                </div>`
+              : html`
+                  <div class="task-list">
+                    ${this._sortTasks(filtered).map(task => this._renderTask(task))}
+                  </div>
+                  ${hasHidden ? html`
+                    <button class="filter-expand-btn"
+                      @click=${() => { this._showHidden = !this._showHidden; }}>
+                      ${this._showHidden
+                        ? `▲ Hide ${hidden.length} filtered task${hidden.length !== 1 ? 's' : ''}`
+                        : `▼ Show ${hidden.length} filtered task${hidden.length !== 1 ? 's' : ''}`}
+                    </button>
+                    ${this._showHidden ? html`
+                      <div class="hidden-divider">Hidden by filter</div>
+                      <div class="task-list">
+                        ${this._sortTasks(hidden).map(task => html`
+                          <div class="filtered-hidden-wrapper">
+                            ${this._renderTask(task)}
+                          </div>
+                        `)}
+                      </div>
+                    ` : nothing}
+                  ` : nothing}
+                `}
 
         ${this._showForm ? html`
           <div class="form-panel">
