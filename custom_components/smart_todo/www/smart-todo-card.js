@@ -73,7 +73,7 @@
       font-size: 0.75rem;
       color: var(--secondary-text-color);
     }
-  `,f([_()],T.prototype,"_config",2),T=f([re("smart-todo-card-editor")],T);var m=class extends y{constructor(){super(...arguments);this._tasks=[];this._loading=!1;this._showForm=!1;this._formTitle="";this._formDue="";this._formPriority=2;this._formAssignee="";this._formRecurrenceType="none";this._formWeekdays=[];this._formTime="09:00";this._formIntervalDays=7;this._formAnchorDate="";this._formSubmitting=!1;this._snoozeDate="";this._snoozeTime="08:00";this._showHidden=!1}static getConfigElement(){return document.createElement("smart-todo-card-editor")}static getStubConfig(){return{entity:"",filter:"all"}}setConfig(e){if(!e.entity)throw new Error('smart-todo-card: "entity" is required in card config.');this._config=e,this._showHidden=!1}set hass(e){if(this._hass=e,!this._config?.entity)return;let s=this._hass.states[this._config.entity];if(!s)return;let r=s.last_updated;r!==this._lastUpdated&&(this._lastUpdated=r,clearTimeout(this._debounceTimer),this._debounceTimer=setTimeout(()=>this._fetchTasks(),500))}get hass(){return this._hass}async _fetchTasks(){if(!(!this._hass||!this._config)){this._loading=!0,this._error=void 0;try{let e=await this._hass.callService("smart_todo","get_tasks",{},void 0,!1,!0),s=e.response?.tasks??e.tasks??[];this._tasks=s}catch(e){let s=e instanceof Error?e.message:typeof e=="object"&&e!==null&&"message"in e?String(e.message):JSON.stringify(e);this._error=`Failed to load tasks: ${s}`}finally{this._loading=!1}}}_isCompletedToday(e){if(!e.last_completed_at)return!1;let s=new Date(e.last_completed_at.replace(/(\.\d{3})\d+/,"$1")),r=new Date;return s.getFullYear()===r.getFullYear()&&s.getMonth()===r.getMonth()&&s.getDate()===r.getDate()}_getFilteredTasks(){let e=this._config?.filter??"all";if(e==="all")return this._tasks.filter(n=>!this._isCompletedToday(n));let s=new Date,r=new Date(s.getFullYear(),s.getMonth(),s.getDate()),o=this._config?.filter_days??7;return this._tasks.filter(n=>{if(n.completed||this._isCompletedToday(n))return!1;let l=n.overdue===!0;if(e==="overdue")return l;let a=1/0;if(n.due_at){let u=new Date(n.due_at.replace(/(\.\d{3})\d+/,"$1")),g=new Date(u.getFullYear(),u.getMonth(),u.getDate());a=Math.round((g.getTime()-r.getTime())/864e5)}let h=a===0,d=a>=0&&a<=o;switch(e){case"today":return h&&!l;case"today_plus_overdue":return h||l;case"x_days":return d&&!l;case"x_days_plus_overdue":return d||l;default:return!0}})}_sortTasks(e){return e.slice().sort((s,r)=>{if(s.completed!==r.completed)return s.completed?1:-1;let o=a=>{if(!a)return Number.MAX_SAFE_INTEGER;let h=new Date(a.replace(/(\.\d{3})\d+/,"$1")).getTime();return isNaN(h)?Number.MAX_SAFE_INTEGER:h},n=o(s.due_at),l=o(r.due_at);return n!==l?n<l?-1:1:s.sort_order-r.sort_order})}render(){if(!this._config)return c;let e=this._getFilteredTasks(),s=this._config.filter??"all",r=new Set(e.map(d=>d.id)),o=s==="all"?[]:this._tasks.filter(d=>!r.has(d.id)),n=o.length>0,l=e.length,a=e.filter(d=>d.overdue&&!d.completed).length,h=this._config.title??"Smart Todo";return p`
+  `,f([_()],T.prototype,"_config",2),T=f([re("smart-todo-card-editor")],T);var m=class extends y{constructor(){super(...arguments);this._tasks=[];this._loading=!1;this._showForm=!1;this._formTitle="";this._formDue="";this._formPriority=2;this._formAssignee="";this._formRecurrenceType="none";this._formWeekdays=[];this._formTime="09:00";this._formIntervalDays=7;this._formAnchorDate="";this._formSubmitting=!1;this._snoozeDate="";this._snoozeTime="08:00";this._showHidden=!1}static getConfigElement(){return document.createElement("smart-todo-card-editor")}static getStubConfig(){return{entity:"",filter:"all"}}setConfig(e){if(!e.entity)throw new Error('smart-todo-card: "entity" is required in card config.');this._config=e,this._showHidden=!1}set hass(e){if(this._hass=e,!this._config?.entity)return;let s=this._hass.states[this._config.entity];if(!s)return;let r=s.last_updated;r!==this._lastUpdated&&(this._lastUpdated=r,clearTimeout(this._debounceTimer),this._debounceTimer=setTimeout(()=>this._fetchTasks(),500))}get hass(){return this._hass}async _fetchTasks(){if(!(!this._hass||!this._config)){this._loading=!0,this._error=void 0;try{let e=await this._hass.callService("smart_todo","get_tasks",{},void 0,!1,!0),s=e.response?.tasks??e.tasks??[];this._tasks=s}catch(e){let s=e instanceof Error?e.message:typeof e=="object"&&e!==null&&"message"in e?String(e.message):JSON.stringify(e);this._error=`Failed to load tasks: ${s}`}finally{this._loading=!1}}}_isCompletedToday(e){if(!e.last_completed_at)return!1;let s=new Date(e.last_completed_at.replace(/(\.\d{3})\d+/,"$1")),r=new Date;return s.getFullYear()===r.getFullYear()&&s.getMonth()===r.getMonth()&&s.getDate()===r.getDate()}_getFilteredTasks(){let e=this._config?.filter??"all";if(e==="all")return this._tasks.filter(n=>!this._isCompletedToday(n));let s=new Date,r=new Date(s.getFullYear(),s.getMonth(),s.getDate()),o=this._config?.filter_days??7;return this._tasks.filter(n=>{if(n.completed||this._isCompletedToday(n))return!1;let l=n.overdue===!0;if(e==="overdue")return l;let a=1/0;if(n.due_at){let u=new Date(n.due_at.replace(/(\.\d{3})\d+/,"$1")),g=new Date(u.getFullYear(),u.getMonth(),u.getDate());a=Math.round((g.getTime()-r.getTime())/864e5)}let h=a===0,d=a>=0&&a<=o;switch(e){case"today":return h&&!l;case"today_plus_overdue":return h||l;case"x_days":return d&&!l;case"x_days_plus_overdue":return d||l;default:return!0}})}_sortTasks(e){return e.slice().sort((s,r)=>{if(s.completed!==r.completed)return s.completed?1:-1;let o=a=>{if(!a)return Number.MAX_SAFE_INTEGER;let h=new Date(a.replace(/(\.\d{3})\d+/,"$1")).getTime();return isNaN(h)?Number.MAX_SAFE_INTEGER:h},n=o(s.due_at),l=o(r.due_at);return n!==l?n<l?-1:1:s.sort_order-r.sort_order})}render(){if(!this._config)return c;let e=this._getFilteredTasks(),s=this._config.filter??"all",r=new Set(e.map(d=>d.id)),o=s==="all"?[]:this._tasks.filter(d=>!r.has(d.id)&&!d.completed&&!this._isCompletedToday(d)),n=o.length>0,l=e.length,a=e.filter(d=>d.overdue&&!d.completed).length,h=this._config.title??"Smart Todo";return p`
       <ha-card>
         <div class="header">
           <span class="title">${h}</span>
@@ -580,19 +580,20 @@
     .snooze-time { flex: 1; }
     .filter-expand-btn {
       background: none;
-      border: none;
+      border: 1px solid var(--divider-color, rgba(255,255,255,0.15));
+      border-radius: 6px;
       cursor: pointer;
-      padding: 8px 0 4px;
+      padding: 6px 12px;
+      margin-top: 8px;
       font-size: 0.8rem;
-      color: var(--secondary-text-color);
+      color: var(--primary-color, #0288d1);
       display: block;
       text-align: center;
       width: 100%;
-      opacity: 0.75;
+      box-sizing: border-box;
     }
     .filter-expand-btn:hover {
-      opacity: 1;
-      color: var(--primary-text-color);
+      background: var(--divider-color, rgba(255,255,255,0.08));
     }
     .hidden-divider {
       font-size: 0.7rem;

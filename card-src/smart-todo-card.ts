@@ -492,19 +492,20 @@ export class SmartTodoCard extends LitElement {
     .snooze-time { flex: 1; }
     .filter-expand-btn {
       background: none;
-      border: none;
+      border: 1px solid var(--divider-color, rgba(255,255,255,0.15));
+      border-radius: 6px;
       cursor: pointer;
-      padding: 8px 0 4px;
+      padding: 6px 12px;
+      margin-top: 8px;
       font-size: 0.8rem;
-      color: var(--secondary-text-color);
+      color: var(--primary-color, #0288d1);
       display: block;
       text-align: center;
       width: 100%;
-      opacity: 0.75;
+      box-sizing: border-box;
     }
     .filter-expand-btn:hover {
-      opacity: 1;
-      color: var(--primary-text-color);
+      background: var(--divider-color, rgba(255,255,255,0.08));
     }
     .hidden-divider {
       font-size: 0.7rem;
@@ -648,7 +649,9 @@ export class SmartTodoCard extends LitElement {
     const filtered = this._getFilteredTasks();
     const mode = this._config.filter ?? 'all';
     const filteredIds = new Set(filtered.map(t => t.id));
-    const hidden = mode === 'all' ? [] : this._tasks.filter(t => !filteredIds.has(t.id));
+    const hidden = mode === 'all' ? [] : this._tasks.filter(t =>
+      !filteredIds.has(t.id) && !t.completed && !this._isCompletedToday(t)
+    );
     const hasHidden = hidden.length > 0;
     const totalTasks = filtered.length;
     const overdueCnt = filtered.filter(t => t.overdue && !t.completed).length;
