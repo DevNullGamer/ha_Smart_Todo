@@ -49,6 +49,7 @@ jobs:
     needs: [build-card, test-python]
     if: github.event_name == 'push'
     steps:
+      - uses: actions/checkout@v4
       - name: Download card artifact
         uses: actions/download-artifact@v4
         with:
