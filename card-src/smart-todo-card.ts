@@ -554,9 +554,9 @@ export class SmartTodoCard extends LitElement {
     return this._hass;
   }
 
-  private async _fetchTasks(): Promise<void> {
+  private async _fetchTasks(silent = false): Promise<void> {
     if (!this._hass || !this._config) return;
-    this._loading = true;
+    if (!silent) this._loading = true;
     this._error = undefined;
     try {
       const raw = await this._hass.callService(
@@ -889,7 +889,7 @@ export class SmartTodoCard extends LitElement {
     try {
       await this._hass.callService('smart_todo', 'create_task', data, undefined, false);
       this._showForm = false;
-      // Re-fetch will trigger via hass last_updated change
+      void this._fetchTasks(true);
     } catch (err) {
       this._error = `Failed to create task: ${err instanceof Error ? err.message : String(err)}`;
     } finally {
@@ -900,6 +900,7 @@ export class SmartTodoCard extends LitElement {
   private async _completeTask(taskId: string): Promise<void> {
     try {
       await this._hass.callService('smart_todo', 'complete_task', { task_id: taskId }, undefined, false);
+      void this._fetchTasks(true);
     } catch (err) {
       this._error = `Failed to complete task: ${err instanceof Error ? err.message : String(err)}`;
     }
@@ -911,6 +912,7 @@ export class SmartTodoCard extends LitElement {
       clearTimeout(this._confirmDeleteTimer);
       this._confirmDeleteId = undefined;
       this._hass.callService('smart_todo', 'delete_task', { task_id: taskId }, undefined, false)
+        .then(() => this._fetchTasks(true))
         .catch((err: unknown) => {
           this._error = `Failed to delete task: ${err instanceof Error ? err.message : String(err)}`;
         });
@@ -943,6 +945,7 @@ export class SmartTodoCard extends LitElement {
         snooze_until: snoozeUntil,
       }, undefined, false);
       this._snoozeTaskId = undefined;
+      void this._fetchTasks(true);
     } catch (err) {
       this._error = `Failed to snooze task: ${err instanceof Error ? err.message : String(err)}`;
     }
