@@ -178,3 +178,8 @@ get_tasks:
       description: "true = completed only, false = incomplete only, omit = all."
       selector:
         boolean:
+
+purge_completed:
+  name: Purge completed tasks
+  description: Permanently deletes all completed non-recurring tasks.
+  fields: {}

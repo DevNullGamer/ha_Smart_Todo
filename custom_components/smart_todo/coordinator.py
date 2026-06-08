@@ -249,6 +249,22 @@ class SmartTodoCoordinator(
         await self._store.async_save()
         await self.async_refresh()
 
+    async def async_purge_completed(self) -> None:
+        """Delete all completed non-recurring tasks."""
+        definitions = self._store.definitions
+        states = self._store.states
+        to_delete = [
+            task_id for task_id, definition in definitions.items()
+            if definition.recurrence is None
+            and states.get(task_id) is not None
+            and states[task_id].completed
+        ]
+        for task_id in to_delete:
+            self._store.delete_task(task_id)
+        if to_delete:
+            await self._store.async_save()
+            await self.async_refresh()
+
     # ------------------------------------------------------------------
     # Recalculation
     # ------------------------------------------------------------------

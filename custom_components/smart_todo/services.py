@@ -17,6 +17,7 @@ from .const import (
     SERVICE_CREATE_TASK,
     SERVICE_DELETE_TASK,
     SERVICE_GET_TASKS,
+    SERVICE_PURGE_COMPLETED,
     SERVICE_RECALCULATE_RECURRENCE,
     SERVICE_REOPEN_TASK,
     SERVICE_SNOOZE_TASK,
@@ -80,6 +81,8 @@ GET_TASKS_SCHEMA = vol.Schema(
         vol.Optional("completed"): vol.Any(None, cv.boolean),
     }
 )
+
+PURGE_COMPLETED_SCHEMA = vol.Schema({})
 
 # ---------------------------------------------------------------------------
 # Helper
@@ -178,6 +181,12 @@ async def async_delete_task(call: ServiceCall) -> None:
     await coordinator.async_delete_task(call.data["task_id"])
 
 
+async def async_purge_completed(call: ServiceCall) -> None:
+    """Handle the purge_completed service call."""
+    coordinator = _get_coordinator(call.hass, call)
+    await coordinator.async_purge_completed()
+
+
 async def async_recalculate_recurrence(call: ServiceCall) -> None:
     """Handle the recalculate_recurrence service call."""
     coordinator = _get_coordinator(call.hass, call)
@@ -224,6 +233,12 @@ def async_register_services(hass: HomeAssistant) -> None:
     )
     hass.services.async_register(
         DOMAIN,
+        SERVICE_PURGE_COMPLETED,
+        async_purge_completed,
+        schema=PURGE_COMPLETED_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
         SERVICE_RECALCULATE_RECURRENCE,
         async_recalculate_recurrence,
         schema=RECALCULATE_SCHEMA,
@@ -246,6 +261,7 @@ def async_unregister_services(hass: HomeAssistant) -> None:
         SERVICE_UPDATE_TASK,
         SERVICE_SNOOZE_TASK,
         SERVICE_DELETE_TASK,
+        SERVICE_PURGE_COMPLETED,
         SERVICE_RECALCULATE_RECURRENCE,
         SERVICE_GET_TASKS,
     ]:

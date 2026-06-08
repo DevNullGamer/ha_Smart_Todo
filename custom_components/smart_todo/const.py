@@ -32,6 +32,7 @@ SERVICE_SNOOZE_TASK = "snooze_task"
 SERVICE_DELETE_TASK = "delete_task"
 SERVICE_RECALCULATE_RECURRENCE = "recalculate_recurrence"
 SERVICE_GET_TASKS = "get_tasks"
+SERVICE_PURGE_COMPLETED = "purge_completed"
 
 # Recurrence mode constants (must match Literal values in models.py Stage 2)
 RECURRENCE_INTERVAL_DAYS = "interval_days"
