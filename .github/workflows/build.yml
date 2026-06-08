@@ -1,0 +1,65 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 2 * * *'
+
+jobs:
+  build-card:
+    name: Build Lovelace Card
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: card-src/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+        working-directory: card-src
+      - name: Build card
+        # verify-only: output is intentionally not committed
+        run: npm run build
+        working-directory: card-src
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: smart-todo-card
+          path: custom_components/smart_todo/www/smart-todo-card.js
+
+  test-python:
+    name: Python Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install pytest
+        run: pip install pytest
+      - name: Run tests
+        run: pytest
+
+  release-nightly:
+    name: Release Nightly
+    runs-on: ubuntu-latest
+    needs: [build-card, test-python]
+    if: github.event_name == 'push'
+    steps:
+      - name: Download card artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: smart-todo-card
+          path: .
+      - name: Delete existing Nightly release
+        run: gh release delete Nightly --yes --cleanup-tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+      - name: Create Nightly release
+        run: gh release create Nightly smart-todo-card.js --title "Nightly" --prerelease
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
