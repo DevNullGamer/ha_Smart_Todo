@@ -42,6 +42,23 @@ create_task:
       description: Recurrence rule as a dict (mode, interval_days, weekdays, etc.)
       selector:
         object:
+    points:
+      name: Points
+      description: Optional reward points earned when this task is completed.
+      default: 0
+      example: 5
+      selector:
+        number:
+          min: 0
+          mode: box
+    reward_recipient:
+      name: Reward recipient
+      description: >-
+        Free-text name of who earns the points on completion. Falls back to
+        assignee if omitted. Does not require a Home Assistant account.
+      example: "Mina"
+      selector:
+        text:
 
 complete_task:
   name: Complete task
@@ -110,6 +127,20 @@ update_task:
       description: Updated recurrence rule as a dict.
       selector:
         object:
+    points:
+      name: Points
+      description: New reward points value for this task.
+      example: 5
+      selector:
+        number:
+          min: 0
+          mode: box
+    reward_recipient:
+      name: Reward recipient
+      description: New reward recipient name (free text; falls back to assignee).
+      example: "Mina"
+      selector:
+        text:
 
 snooze_task:
   name: Snooze task
@@ -183,3 +214,30 @@ purge_completed:
   name: Purge completed tasks
   description: Permanently deletes all completed non-recurring tasks.
   fields: {}
+
+spend_points:
+  name: Spend points
+  description: Deducts points from a recipient's balance in exchange for a reward.
+  fields:
+    recipient:
+      name: Recipient
+      description: Who is spending points. Must match the configured roster if one is set.
+      required: true
+      example: "Mina"
+      selector:
+        text:
+    amount:
+      name: Amount
+      description: How many points to deduct. Cannot exceed the current balance.
+      required: true
+      example: 20
+      selector:
+        number:
+          min: 1
+          mode: box
+    note:
+      name: Spent on
+      description: Optional free-text note describing what the points were spent on.
+      example: "30 min extra screen time"
+      selector:
+        text:

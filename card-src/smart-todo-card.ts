@@ -151,6 +151,7 @@ export class SmartTodoCard extends LitElement {
 
   @state() private _config?: SmartTodoCardConfig;
   @state() private _tasks: Task[] = [];
+  @state() private _roster: string[] = [];
   @state() private _loading = false;
   @state() private _error?: string;
 
@@ -159,6 +160,8 @@ export class SmartTodoCard extends LitElement {
   @state() private _formDue = '';
   @state() private _formPriority = 2;
   @state() private _formAssignee = '';
+  @state() private _formPoints = 0;
+  @state() private _formRewardRecipient = '';
   @state() private _formRecurrenceType = 'none';
   // Sub-fields
   @state() private _formWeekdays: number[] = [];   // 0=Mon…6=Sun
@@ -446,6 +449,17 @@ export class SmartTodoCard extends LitElement {
       flex-shrink: 0;
       text-transform: uppercase;
     }
+    .points-badge {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--primary-text-color);
+      background: var(--secondary-background-color, rgba(255,170,0,0.15));
+      border: 1px solid rgba(255, 170, 0, 0.4);
+      border-radius: 10px;
+      padding: 2px 7px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
     .task-actions {
       display: flex;
       gap: 4px;
@@ -566,12 +580,15 @@ export class SmartTodoCard extends LitElement {
         undefined,
         false,   // notifyOnFailure
         true,    // returnResponse
-      ) as { tasks?: Task[] } | { response?: { tasks?: Task[] } };
-      // HA wraps service response data under .response in some versions
-      const tasks = (raw as { response?: { tasks?: Task[] } }).response?.tasks
-        ?? (raw as { tasks?: Task[] }).tasks
-        ?? [];
-      this._tasks = tasks;
+      ) as GetTasksResult | { response?: GetTasksResult };
+      // HA wraps service response data under .response in some versions.
+      // Each field falls back independently (not "response as a whole, else
+      // top-level as a whole") in case a given HA version populates one
+      // field under .response and leaves the other at the top level.
+      const response = (raw as { response?: GetTasksResult }).response;
+      const top = raw as GetTasksResult;
+      this._tasks = response?.tasks ?? top?.tasks ?? [];
+      this._roster = response?.roster ?? top?.roster ?? [];
     } catch (err) {
       const msg = err instanceof Error
         ? err.message
@@ -754,8 +771,28 @@ export class SmartTodoCard extends LitElement {
             <!-- Assignee -->
             <label class="form-label">Assignee</label>
             <input class="form-input" type="text" .value=${this._formAssignee}
+              list="smart-todo-roster-list"
               @input=${(e: Event) => this._formAssignee = (e.target as HTMLInputElement).value}
               placeholder="Optional" />
+
+            <!-- Points -->
+            <label class="form-label">Points</label>
+            <input class="form-input" type="number" min="0" .value=${String(this._formPoints)}
+              @input=${(e: Event) => this._formPoints = parseInt((e.target as HTMLInputElement).value) || 0}
+              placeholder="0" />
+
+            <!-- Reward recipient (only meaningful when Points > 0) -->
+            ${this._formPoints > 0 ? html`
+              <label class="form-label">Reward recipient</label>
+              <input class="form-input" type="text" .value=${this._formRewardRecipient}
+                list="smart-todo-roster-list"
+                @input=${(e: Event) => this._formRewardRecipient = (e.target as HTMLInputElement).value}
+                placeholder="Defaults to assignee" />
+            ` : nothing}
+
+            <datalist id="smart-todo-roster-list">
+              ${this._roster.map(name => html`<option value=${name}></option>`)}
+            </datalist>
 
             <!-- Recurrence type -->
             <label class="form-label">Recurrence</label>
@@ -793,6 +830,8 @@ export class SmartTodoCard extends LitElement {
     this._formDue = '';
     this._formPriority = 2;
     this._formAssignee = '';
+    this._formPoints = 0;
+    this._formRewardRecipient = '';
     this._formRecurrenceType = 'none';
     this._formWeekdays = [];
     this._formTime = '09:00';
@@ -883,6 +922,13 @@ export class SmartTodoCard extends LitElement {
     };
     if (this._formDue) data['due_at'] = `${this._formDue}T00:00:00`;
     if (this._formAssignee.trim()) data['assignee'] = this._formAssignee.trim();
+    if (this._formPoints > 0) data['points'] = this._formPoints;
+    // Matches the form's render-gate (reward recipient is only shown/editable
+    // when Points > 0) — otherwise a recipient typed before resetting Points
+    // back to 0 would silently submit anyway even though the field is hidden.
+    if (this._formPoints > 0 && this._formRewardRecipient.trim()) {
+      data['reward_recipient'] = this._formRewardRecipient.trim();
+    }
     const recurrence = this._buildRecurrenceDict();
     if (recurrence) data['recurrence'] = recurrence;
 
@@ -1052,6 +1098,23 @@ export class SmartTodoCard extends LitElement {
               : nothing}
         </div>
         <div class="task-row-right">
+          ${task.points > 0
+            ? html`<div class="points-badge"
+                title="${[
+                  task.reward_recipient
+                    ? `Reward recipient: ${task.reward_recipient}`
+                    : 'Falls back to assignee',
+                  // points_earned is a lifetime cumulative total (it never
+                  // resets on recurrence), so it's shown as separate context
+                  // in the tooltip rather than as an "earned/potential"
+                  // ratio next to task.points — for a recurring task
+                  // completed several times that ratio can exceed 100% and
+                  // reads as a bug (e.g. "15/5pts").
+                  task.points_earned > 0 ? `Earned ${task.points_earned}pt(s) so far` : null,
+                ].filter(Boolean).join(' · ')}">
+                ${task.points}pts
+              </div>`
+            : nothing}
           ${task.assignee
             ? html`<div class="assignee-chip">${this._assigneeInitials(task.assignee)}</div>`
             : nothing}
@@ -1092,6 +1155,9 @@ export interface Task {
   priority: number;
   priority_label: string;
   assignee?: string | null;
+  points: number;
+  reward_recipient?: string | null;
+  points_earned: number;
   due_at?: string | null;
   completed: boolean;
   overdue: boolean;
@@ -1100,6 +1166,12 @@ export interface Task {
   last_completed_at?: string | null;
   created_at: string;
   sort_order: number;
+}
+
+// Shape of the get_tasks service response (services.py's async_get_tasks).
+export interface GetTasksResult {
+  tasks: Task[];
+  roster: string[];
 }
 
 // HACS card discovery

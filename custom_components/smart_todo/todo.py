@@ -119,6 +119,11 @@ class SmartTodoListEntity(CoordinatorEntity[SmartTodoCoordinator], TodoListEntit
                 "total_tasks": 0,
                 "overdue_count": 0,
                 "completed_today": 0,
+                "points_available": 0,
+                "points_earned_total": 0,
+                "points_spent_total": 0,
+                "points_by_recipient": {},
+                "points_balance_by_recipient": {},
                 "next_due": None,
             }
 
@@ -126,9 +131,10 @@ class SmartTodoListEntity(CoordinatorEntity[SmartTodoCoordinator], TodoListEntit
         total_tasks = len(self.coordinator.data)
         overdue_count = 0
         completed_today = 0
+        points_available = 0
         next_due_dt: datetime | None = None
 
-        for _task_id, (_definition, state) in self.coordinator.data.items():
+        for task_id, (definition, state) in self.coordinator.data.items():
             if state.overdue:
                 overdue_count += 1
 
@@ -142,10 +148,36 @@ class SmartTodoListEntity(CoordinatorEntity[SmartTodoCoordinator], TodoListEntit
                 if next_due_dt is None or state.due_at < next_due_dt:
                     next_due_dt = state.due_at
 
+            if definition.points > 0 and not state.completed:
+                points_available += definition.points
+
+        # Recipients come from the persisted ledger (coordinator.py), not from
+        # live task iteration — a recipient's earned/spent history must not
+        # disappear just because the task that earned it was later deleted
+        # (e.g. via purge_completed).
+        # points_by_recipient stays gross-earned (chg001 meaning, unchanged for
+        # backward compatibility); net balances are exposed separately.
+        recipients = self.coordinator.get_known_recipients()
+        points_by_recipient = {
+            name: self.coordinator.get_earned_total(name) for name in recipients
+        }
+        points_balance_by_recipient = {
+            name: self.coordinator.get_balance(name) for name in recipients
+        }
+        points_earned_total = sum(points_by_recipient.values())
+        # Derived rather than re-summing get_spent_total() per recipient —
+        # spent = earned - balance, and both are already computed above.
+        points_spent_total = points_earned_total - sum(points_balance_by_recipient.values())
+
         return {
             "total_tasks": total_tasks,
             "overdue_count": overdue_count,
             "completed_today": completed_today,
+            "points_available": points_available,
+            "points_earned_total": points_earned_total,
+            "points_spent_total": points_spent_total,
+            "points_by_recipient": points_by_recipient,
+            "points_balance_by_recipient": points_balance_by_recipient,
             "next_due": next_due_dt.isoformat() if next_due_dt is not None else None,
         }
 

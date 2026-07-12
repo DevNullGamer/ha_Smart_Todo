@@ -8,8 +8,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DOMAIN, DEFAULT_UPDATE_INTERVAL_SECONDS, PRIORITY_LABELS
-from .models import TaskDefinition, TaskRuntimeState, RecurrenceRule, make_task_id
+from .const import CONF_ROSTER, DOMAIN, DEFAULT_UPDATE_INTERVAL_SECONDS, PRIORITY_LABELS
+from .models import RecurrenceRule, SpendEntry, TaskDefinition, TaskRuntimeState, make_task_id
 from .storage import SmartTodoStore
 from .recurrence import next_due_date, is_overdue, describe_rule
 
@@ -23,6 +23,7 @@ class SmartTodoCoordinator(
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self._store = SmartTodoStore(hass)
+        self._entry = entry
         super().__init__(
             hass,
             _LOGGER,
@@ -85,6 +86,8 @@ class SmartTodoCoordinator(
             priority=definition_data.get("priority", 2),
             assignee=definition_data.get("assignee"),
             recurrence=recurrence,
+            points=definition_data.get("points", 0),
+            reward_recipient=definition_data.get("reward_recipient"),
         )
 
         state = TaskRuntimeState(
@@ -130,11 +133,13 @@ class SmartTodoCoordinator(
         state = states[task_id]
         definition = definitions.get(task_id)
         now = datetime.now(timezone.utc)
+        already_awarded_this_cycle = state.points_awarded_this_cycle
 
         state.completed = True
         state.last_completed_at = now
         state.snoozed_until = None
 
+        starting_new_cycle = False
         if definition is not None and definition.recurrence is not None:
             rule = definition.recurrence
             # Rolling mode: roll from now (completion time)
@@ -148,10 +153,141 @@ class SmartTodoCoordinator(
             state.due_at = next_due_date(rule, reference, now)
             # Recurring tasks auto-reset — they do NOT stay completed
             state.completed = False
+            starting_new_cycle = True
+
+        points_awarded = 0
+        reward_recipient: str | None = None
+        # points_awarded_this_cycle guards against earning points repeatedly by
+        # reopening and re-completing the same (non-recurring) task — reopening
+        # resets `completed` but must not reset eligibility for a fresh reward.
+        if not already_awarded_this_cycle and definition is not None and definition.points > 0:
+            reward_recipient = definition.reward_recipient or definition.assignee
+            if reward_recipient is not None:
+                state.points_earned += definition.points
+                points_awarded = definition.points
+                normalized = self.normalize_recipient(reward_recipient)
+                self._store.add_earned(normalized, points_awarded)
+                self._store.record_recipient_seen(normalized, reward_recipient.strip())
+
+        # A new recurrence cycle always starts fresh and eligible for its own
+        # reward; otherwise latch the flag once points have been awarded.
+        state.points_awarded_this_cycle = (
+            False if starting_new_cycle else (already_awarded_this_cycle or points_awarded > 0)
+        )
 
         self._store.set_state(state)
         await self._store.async_save()
         await self.async_refresh()
+
+        self.hass.bus.async_fire(
+            "smart_todo_task_completed",
+            {
+                "task_id": task_id,
+                "title": definition.title if definition is not None else None,
+                "points": definition.points if definition is not None else 0,
+                "points_awarded": points_awarded,
+                "reward_recipient": reward_recipient,
+                "completed_at": now.isoformat(),
+            },
+        )
+
+    # ------------------------------------------------------------------
+    # Roster / reward ledger
+    # ------------------------------------------------------------------
+
+    def get_roster(self) -> list[str]:
+        """Return the configured list of reward-eligible recipient names."""
+        return list(self._entry.options.get(CONF_ROSTER, []))
+
+    @staticmethod
+    def normalize_recipient(name: str) -> str:
+        """Canonicalization rule used everywhere recipient names are compared."""
+        return name.strip().lower()
+
+    def get_earned_total(self, recipient: str) -> int:
+        """Return recipient's persisted lifetime earned total (case-insensitive).
+
+        Backed by SmartTodoStore's independent ``earned_totals`` ledger, not
+        derived from live task state — task deletion (e.g. purge_completed)
+        must not silently erase earned history that a spend ledger entry may
+        already depend on.
+        """
+        return self._store.earned_totals.get(self.normalize_recipient(recipient), 0)
+
+    def get_spent_total(self, recipient: str) -> int:
+        """Sum all spend ledger entries for *recipient* (case-insensitive)."""
+        target = self.normalize_recipient(recipient)
+        return sum(
+            entry.amount
+            for entry in self._store.spend_entries
+            if self.normalize_recipient(entry.recipient) == target
+        )
+
+    def get_balance(self, recipient: str) -> int:
+        """Return *recipient*'s current spendable balance (earned minus spent)."""
+        return self.get_earned_total(recipient) - self.get_spent_total(recipient)
+
+    def get_known_recipients(self) -> list[str]:
+        """Return display names for everyone who has ever earned or spent points.
+
+        Roster casing wins when a name matches a configured roster entry;
+        otherwise falls back to the first-seen casing recorded in storage.
+        """
+        keys = set(self._store.earned_totals.keys()) | {
+            self.normalize_recipient(entry.recipient)
+            for entry in self._store.spend_entries
+        }
+        roster_by_key = {
+            self.normalize_recipient(name): name for name in self.get_roster()
+        }
+        display_names = self._store.recipient_display_names
+        return sorted(
+            roster_by_key.get(key) or display_names.get(key, key) for key in keys
+        )
+
+    async def async_spend_points(
+        self, recipient: str, amount: int, note: str | None = None
+    ) -> None:
+        """Deduct *amount* points from *recipient*'s balance.
+
+        Rejects the spend (raises ValueError) if amount is non-positive or
+        exceeds the recipient's current balance — overspending into a negative
+        balance is not allowed.
+        """
+        if amount <= 0:
+            raise ValueError("amount must be a positive number of points")
+
+        balance = self.get_balance(recipient)
+        if amount > balance:
+            raise ValueError(
+                f"{recipient} has {balance} point(s) available; cannot spend {amount}"
+            )
+
+        now = datetime.now(timezone.utc)
+        entry = SpendEntry(
+            id=make_task_id(),
+            recipient=recipient,
+            amount=amount,
+            timestamp=now,
+            note=note,
+        )
+        self._store.add_spend_entry(entry)
+        self._store.record_recipient_seen(
+            self.normalize_recipient(recipient), recipient.strip()
+        )
+        await self._store.async_save()
+        await self.async_refresh()
+
+        self.hass.bus.async_fire(
+            "smart_todo_points_spent",
+            {
+                "recipient": recipient,
+                "amount": amount,
+                "note": note,
+                "balance_after": self.get_balance(recipient),
+                "spent_at": now.isoformat(),
+            },
+        )
 
     async def async_reopen_task(self, task_id: str) -> None:
         """Reopen a completed task; last_completed_at is preserved."""
@@ -193,6 +329,10 @@ class SmartTodoCoordinator(
             definition.priority = patch["priority"]
         if "assignee" in patch:
             definition.assignee = patch["assignee"]
+        if "points" in patch:
+            definition.points = patch["points"]
+        if "reward_recipient" in patch:
+            definition.reward_recipient = patch["reward_recipient"]
         if "recurrence" in patch:
             raw = patch["recurrence"]
             if raw is None:
@@ -323,7 +463,8 @@ class SmartTodoCoordinator(
                 continue
             if assignee is not None and (
                 definition.assignee is None
-                or definition.assignee.lower() != assignee.lower()
+                or self.normalize_recipient(definition.assignee)
+                != self.normalize_recipient(assignee)
             ):
                 continue
             if priority is not None and definition.priority != priority:
@@ -339,6 +480,9 @@ class SmartTodoCoordinator(
                     "priority": definition.priority,
                     "priority_label": PRIORITY_LABELS.get(definition.priority, "unknown"),
                     "assignee": definition.assignee,
+                    "points": definition.points,
+                    "reward_recipient": definition.reward_recipient,
+                    "points_earned": state.points_earned,
                     "due_at": state.due_at.isoformat(timespec="seconds") if state.due_at else None,
                     "completed": state.completed,
                     "overdue": state.overdue,  # computed property — never stored

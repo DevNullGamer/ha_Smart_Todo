@@ -7,6 +7,9 @@ A self-contained recurring task and todo manager for Home Assistant, with HACS s
 - One-off and recurring tasks with flexible schedules
 - Recurrence modes: every N days, N days after completion, specific weekdays, every other week, weekly, monthly (coming soon)
 - Native Home Assistant Todo entity integration
+- Completion event firing for automations
+- Optional reward points per task with recipient-based tracking and entity attributes
+- Fixed reward roster (configurable) with one balance sensor entity per person, and a `spend_points` service for redeeming points
 - Services for full automation control
 - Persistent storage across restarts with schema migration
 - HACS-installable
@@ -43,11 +46,37 @@ Provide a name for the list (e.g. "Family Tasks") when prompted during setup.
 | `smart_todo.snooze_task` | Snooze a task until a date/time |
 | `smart_todo.delete_task` | Delete a task permanently |
 | `smart_todo.recalculate_recurrence` | Recalculate due dates |
-| `smart_todo.get_tasks` | Query tasks (returns response data) |
+| `smart_todo.get_tasks` | Query tasks (returns response data, including the configured roster) |
+| `smart_todo.spend_points` | Deduct points from a recipient's balance |
+
+### Completion event
+
+Completing a task fires the Home Assistant event `smart_todo_task_completed` with data including `task_id`, `title`, `points`, `points_awarded`, `reward_recipient`, and `completed_at`.
+
+### Reward points
+
+Tasks can optionally define `points` and `reward_recipient` when created or updated. If a task is completed and points are configured, the recipient is credited with those points. If no `reward_recipient` is provided, the task `assignee` is used. This makes it work even for users who do not have Home Assistant accounts.
+
+The todo entity exposes aggregated point attributes: `points_available` (unclaimed, from incomplete tasks), `points_earned_total` / `points_by_recipient` (lifetime gross earned), and `points_spent_total` / `points_balance_by_recipient` (net, after spending).
+
+### Reward roster
+
+By default `reward_recipient` is free text, which risks the same person's points fragmenting across typo/case variants (e.g. "Mina" vs "mina"). To avoid that, configure a fixed roster: go to **Settings → Devices & services → Smart Todo → Configure** and enter a comma-separated list of names (e.g. `Mina, Oskar`).
+
+Once a roster is configured:
+- `reward_recipient` (on `create_task`/`update_task`) and `recipient` (on `spend_points`) must case-insensitively match a roster entry, or the service call fails with a clear error.
+- One sensor entity per roster member is created automatically (e.g. "Mina Points"), whose state is their current spendable balance (`points_earned` minus `points_spent`) — usable directly in dashboard tiles, history graphs, and automation triggers, not just as a nested attribute.
+- The Lovelace card offers roster names as autocomplete suggestions on the Assignee and Reward recipient fields (still free text if you don't pick a suggestion).
+
+If the roster is left empty, `reward_recipient`/`recipient` stay unrestricted free text — this matches the pre-roster behavior so existing setups aren't broken.
+
+### Spending points
+
+Call `smart_todo.spend_points` with `recipient`, `amount`, and an optional `note` (e.g. "30 min extra screen time") to deduct points from a recipient's balance. Spending is rejected if `amount` exceeds their current balance — points cannot go negative. Each spend fires a `smart_todo_points_spent` event with `recipient`, `amount`, `note`, `balance_after`, and `spent_at`, so automations can react (e.g. notify a parent when a reward is redeemed).
 
 ## Lovelace Card
 
-A custom card is included that shows all task fields (priority, assignee, recurrence, overdue state) not visible in the native Todo card.
+A custom card is included that shows all task fields (priority, assignee, points, recurrence, overdue state) not visible in the native Todo card, and lets you set points/reward recipient when creating a task (with roster autocomplete, if configured).
 
 ### Add the resource
 

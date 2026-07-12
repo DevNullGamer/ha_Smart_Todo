@@ -60,3 +60,23 @@
         snooze_until: >
           {{ (now() + timedelta(days=1)).replace(hour=8, minute=0, second=0)
              .isoformat() }}
+
+- alias: "Smart Todo: React to task completion"
+  triggers:
+    - trigger: event
+      event_type: smart_todo_task_completed
+  actions:
+    - action: notify.mobile_app_your_phone
+      data:
+        title: "Task completed"
+        message: >-
+          {{ trigger.event.data.title }} was completed and awarded
+          {{ trigger.event.data.points_awarded }} point(s).
+
+- alias: "Smart Todo: Create a rewarded chore"
+  actions:
+    - action: smart_todo.create_task
+      data:
+        title: "Take out the trash"
+        points: 5
+        reward_recipient: "Mina"

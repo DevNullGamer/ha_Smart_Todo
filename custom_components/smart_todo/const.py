@@ -6,8 +6,9 @@ from homeassistant.const import Platform
 DOMAIN = "smart_todo"
 
 CONF_NAME = "name"
+CONF_ROSTER = "roster"
 
-PLATFORMS: list[Platform] = [Platform.TODO]
+PLATFORMS: list[Platform] = [Platform.TODO, Platform.SENSOR]
 
 STORAGE_KEY = "smart_todo.tasks"
 STORAGE_VERSION = 1
@@ -33,6 +34,7 @@ SERVICE_DELETE_TASK = "delete_task"
 SERVICE_RECALCULATE_RECURRENCE = "recalculate_recurrence"
 SERVICE_GET_TASKS = "get_tasks"
 SERVICE_PURGE_COMPLETED = "purge_completed"
+SERVICE_SPEND_POINTS = "spend_points"
 
 # Recurrence mode constants (must match Literal values in models.py Stage 2)
 RECURRENCE_INTERVAL_DAYS = "interval_days"

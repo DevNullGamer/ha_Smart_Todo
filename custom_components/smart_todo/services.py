@@ -21,6 +21,7 @@ from .const import (
     SERVICE_RECALCULATE_RECURRENCE,
     SERVICE_REOPEN_TASK,
     SERVICE_SNOOZE_TASK,
+    SERVICE_SPEND_POINTS,
     SERVICE_UPDATE_TASK,
 )
 from .coordinator import SmartTodoCoordinator
@@ -39,6 +40,8 @@ CREATE_TASK_SCHEMA = vol.Schema(
         vol.Optional("priority", default=2): vol.In([1, 2, 3]),
         vol.Optional("assignee"): vol.Any(None, cv.string),
         vol.Optional("recurrence"): vol.Any(None, dict),
+        vol.Optional("points", default=0): vol.All(vol.Coerce(int), vol.Range(min=0)),
+        vol.Optional("reward_recipient"): vol.Any(None, cv.string),
     }
 )
 
@@ -57,6 +60,8 @@ UPDATE_TASK_SCHEMA = vol.Schema(
         vol.Optional("priority"): vol.In([1, 2, 3]),
         vol.Optional("assignee"): vol.Any(None, cv.string),
         vol.Optional("recurrence"): vol.Any(None, dict),
+        vol.Optional("points"): vol.All(vol.Coerce(int), vol.Range(min=0)),
+        vol.Optional("reward_recipient"): vol.Any(None, cv.string),
     }
 )
 
@@ -84,6 +89,14 @@ GET_TASKS_SCHEMA = vol.Schema(
 
 PURGE_COMPLETED_SCHEMA = vol.Schema({})
 
+SPEND_POINTS_SCHEMA = vol.Schema(
+    {
+        vol.Required("recipient"): cv.string,
+        vol.Required("amount"): vol.All(vol.Coerce(int), vol.Range(min=1)),
+        vol.Optional("note"): vol.Any(None, cv.string),
+    }
+)
+
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
@@ -96,6 +109,30 @@ def _get_coordinator(hass: HomeAssistant, call: ServiceCall) -> SmartTodoCoordin
         if isinstance(value, SmartTodoCoordinator):
             return value
     raise HomeAssistantError("Smart Todo integration is not configured.")
+
+
+def _validate_recipient(
+    coordinator: SmartTodoCoordinator, recipient: str | None, field_name: str
+) -> None:
+    """Validate a recipient name against the configured roster.
+
+    Permissive when no roster has been configured yet — any free text is
+    accepted, matching pre-roster behaviour and keeping the points feature
+    usable without setup. Once a roster exists, the recipient must
+    case-insensitively match one of its entries.
+    """
+    if recipient is None:
+        return
+    roster = coordinator.get_roster()
+    if not roster:
+        return
+    target = coordinator.normalize_recipient(recipient)
+    if not any(coordinator.normalize_recipient(name) == target for name in roster):
+        raise HomeAssistantError(
+            f"'{recipient}' is not in the configured roster for '{field_name}'. "
+            "Add them via Settings → Devices & services → Smart Todo → "
+            "Configure, or leave this field blank."
+        )
 
 
 def _parse_iso_datetime(value: str, field_name: str) -> datetime:
@@ -117,6 +154,7 @@ def _parse_iso_datetime(value: str, field_name: str) -> datetime:
 async def async_create_task(call: ServiceCall) -> None:
     """Handle the create_task service call."""
     coordinator = _get_coordinator(call.hass, call)
+    _validate_recipient(coordinator, call.data.get("reward_recipient"), "reward_recipient")
 
     definition_data: dict = {
         "title": call.data["title"],
@@ -124,6 +162,8 @@ async def async_create_task(call: ServiceCall) -> None:
         "priority": call.data.get("priority", 2),
         "assignee": call.data.get("assignee"),
         "recurrence": call.data.get("recurrence"),
+        "points": call.data.get("points", 0),
+        "reward_recipient": call.data.get("reward_recipient"),
     }
 
     due_at_raw = call.data.get("due_at")
@@ -157,6 +197,9 @@ async def async_update_task(call: ServiceCall) -> None:
     # Validate due_at if present and non-None
     if "due_at" in patch and patch["due_at"] is not None:
         _parse_iso_datetime(patch["due_at"], "due_at")
+
+    if "reward_recipient" in patch:
+        _validate_recipient(coordinator, patch["reward_recipient"], "reward_recipient")
 
     await coordinator.async_update_task(task_id, patch)
 
@@ -203,7 +246,23 @@ async def async_get_tasks(call: ServiceCall) -> dict:
         priority=call.data.get("priority"),
         completed=call.data.get("completed"),
     )
-    return {"tasks": result_list}
+    return {"tasks": result_list, "roster": coordinator.get_roster()}
+
+
+async def async_spend_points(call: ServiceCall) -> None:
+    """Handle the spend_points service call."""
+    coordinator = _get_coordinator(call.hass, call)
+    recipient: str = call.data["recipient"]
+    _validate_recipient(coordinator, recipient, "recipient")
+
+    try:
+        await coordinator.async_spend_points(
+            recipient=recipient,
+            amount=call.data["amount"],
+            note=call.data.get("note"),
+        )
+    except ValueError as exc:
+        raise HomeAssistantError(str(exc)) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -250,6 +309,9 @@ def async_register_services(hass: HomeAssistant) -> None:
         schema=GET_TASKS_SCHEMA,
         supports_response=SupportsResponse.ONLY,
     )
+    hass.services.async_register(
+        DOMAIN, SERVICE_SPEND_POINTS, async_spend_points, schema=SPEND_POINTS_SCHEMA
+    )
 
 
 def async_unregister_services(hass: HomeAssistant) -> None:
@@ -264,5 +326,6 @@ def async_unregister_services(hass: HomeAssistant) -> None:
         SERVICE_PURGE_COMPLETED,
         SERVICE_RECALCULATE_RECURRENCE,
         SERVICE_GET_TASKS,
+        SERVICE_SPEND_POINTS,
     ]:
         hass.services.async_remove(DOMAIN, service)

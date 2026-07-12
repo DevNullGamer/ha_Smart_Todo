@@ -37,7 +37,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmartTodoConfigEntry) ->
     if not hass.services.has_service(DOMAIN, SERVICE_CREATE_TASK):
         async_register_services(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    # Reload on options change (e.g. roster edits) so sensor entities are added/removed.
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
+
+
+async def _async_update_listener(hass: HomeAssistant, entry: SmartTodoConfigEntry) -> None:
+    """Reload the config entry when its options change."""
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: SmartTodoConfigEntry) -> bool:
@@ -45,9 +52,15 @@ async def async_unload_entry(hass: HomeAssistant, entry: SmartTodoConfigEntry) -
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id, None)
-        # When the last real entry is removed, clean up fully
+        # When the last real entry is removed, clean up fully. Note:
+        # "_static_path_registered" is intentionally NOT cleared here.
+        # hass.http.async_register_static_paths has no matching "unregister"
+        # (the underlying aiohttp route stays mounted for the process's
+        # lifetime), and options-flow changes (e.g. roster edits) now trigger
+        # a reload — unload immediately followed by setup of the SAME entry.
+        # Clearing the flag here would make the next setup try to register
+        # "/smart_todo/frontend" a second time and raise.
         remaining = [v for v in hass.data[DOMAIN].values() if isinstance(v, SmartTodoCoordinator)]
         if not remaining:
-            hass.data[DOMAIN].pop("_static_path_registered", None)
             async_unregister_services(hass)
     return unload_ok

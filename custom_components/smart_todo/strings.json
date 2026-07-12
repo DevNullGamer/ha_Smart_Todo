@@ -21,6 +21,20 @@
       "already_configured": "A Smart Todo list with this name is already configured."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Reward roster",
+        "description": "Comma-separated list of people who can earn and spend reward points (e.g. \"Mina, Oskar\"). Leave blank to keep reward_recipient as free text.",
+        "data": {
+          "roster": "Roster"
+        }
+      }
+    },
+    "error": {
+      "duplicate_name": "Two names produce the same entity ID once simplified (e.g. differ only by case or punctuation). Use more distinct names."
+    }
+  },
   "services": {
     "create_task": {
       "name": "Create task",
@@ -31,7 +45,9 @@
         "due_at": { "name": "Due", "description": "Due date/time (ISO 8601)." },
         "priority": { "name": "Priority", "description": "1=low, 2=medium, 3=high." },
         "assignee": { "name": "Assignee", "description": "Optional assignee name." },
-        "recurrence": { "name": "Recurrence", "description": "Recurrence rule as a dict." }
+        "recurrence": { "name": "Recurrence", "description": "Recurrence rule as a dict." },
+        "points": { "name": "Points", "description": "Optional reward points earned when this task is completed." },
+        "reward_recipient": { "name": "Reward recipient", "description": "Who earns the points on completion. Falls back to assignee if omitted." }
       }
     },
     "complete_task": {
@@ -57,7 +73,9 @@
         "notes": { "name": "Notes", "description": "New notes (optional)." },
         "due_at": { "name": "Due", "description": "New due date/time (optional)." },
         "priority": { "name": "Priority", "description": "New priority (optional)." },
-        "assignee": { "name": "Assignee", "description": "New assignee (optional)." }
+        "assignee": { "name": "Assignee", "description": "New assignee (optional)." },
+        "points": { "name": "Points", "description": "New reward points value (optional)." },
+        "reward_recipient": { "name": "Reward recipient", "description": "New reward recipient (optional)." }
       }
     },
     "snooze_task": {
@@ -90,6 +108,15 @@
         "assignee": { "name": "Assignee filter", "description": "Filter by assignee name." },
         "priority": { "name": "Priority filter", "description": "Filter by priority (1/2/3)." },
         "completed": { "name": "Completed filter", "description": "If true, include only completed. If false, exclude completed. If omitted, include all." }
+      }
+    },
+    "spend_points": {
+      "name": "Spend points",
+      "description": "Deducts points from a recipient's balance in exchange for a reward.",
+      "fields": {
+        "recipient": { "name": "Recipient", "description": "Who is spending points. Must match the configured roster if one is set." },
+        "amount": { "name": "Amount", "description": "How many points to deduct. Cannot exceed the current balance." },
+        "note": { "name": "Spent on", "description": "Optional free-text note describing what the points were spent on." }
       }
     }
   }

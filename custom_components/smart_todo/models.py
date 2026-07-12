@@ -87,6 +87,8 @@ class TaskDefinition:
     priority: int = 2                  # 1=low, 2=medium, 3=high
     assignee: str | None = None
     recurrence: RecurrenceRule | None = None
+    points: int = 0                    # reward points earned when completed
+    reward_recipient: str | None = None
 
     # ------------------------------------------------------------------
     def to_dict(self) -> dict:
@@ -99,6 +101,8 @@ class TaskDefinition:
             "priority": self.priority,
             "assignee": self.assignee,
             "recurrence": self.recurrence.to_dict() if self.recurrence is not None else None,
+            "points": self.points,
+            "reward_recipient": self.reward_recipient,
         }
 
     # ------------------------------------------------------------------
@@ -117,6 +121,8 @@ class TaskDefinition:
             priority=data.get("priority", 2),
             assignee=data.get("assignee"),
             recurrence=recurrence,
+            points=data.get("points", 0),
+            reward_recipient=data.get("reward_recipient"),
         )
 
 
@@ -134,6 +140,8 @@ class TaskRuntimeState:
     last_completed_at: datetime | None = None  # tz-aware; stored as ISO string or None
     snoozed_until: datetime | None = None    # tz-aware; stored as ISO string or None
     sort_order: int = 0                      # drag-to-reorder position
+    points_earned: int = 0                   # cumulative points already earned
+    points_awarded_this_cycle: bool = False  # guards against re-earning via reopen
 
     # ------------------------------------------------------------------
     @property
@@ -175,6 +183,8 @@ class TaskRuntimeState:
                 self.snoozed_until.isoformat() if self.snoozed_until is not None else None
             ),
             "sort_order": self.sort_order,
+            "points_earned": self.points_earned,
+            "points_awarded_this_cycle": self.points_awarded_this_cycle,
         }
 
     # ------------------------------------------------------------------
@@ -198,6 +208,46 @@ class TaskRuntimeState:
             last_completed_at=_parse_dt(data.get("last_completed_at")),
             snoozed_until=_parse_dt(data.get("snoozed_until")),
             sort_order=data.get("sort_order", 0),
+            points_earned=data.get("points_earned", 0),
+            points_awarded_this_cycle=data.get("points_awarded_this_cycle", False),
+        )
+
+
+# ---------------------------------------------------------------------------
+# SpendEntry
+# ---------------------------------------------------------------------------
+
+@dataclass
+class SpendEntry:
+    """A single deduction from a recipient's earned points balance."""
+
+    id: str                            # uuid4 string
+    recipient: str
+    amount: int                        # always positive; this is a ledger of deductions
+    timestamp: datetime                # tz-aware; stored as ISO string
+    note: str | None = None            # free-text "spent on" description
+
+    # ------------------------------------------------------------------
+    def to_dict(self) -> dict:
+        """Serialise to a plain dict suitable for JSON storage."""
+        return {
+            "id": self.id,
+            "recipient": self.recipient,
+            "amount": self.amount,
+            "timestamp": self.timestamp.isoformat(),
+            "note": self.note,
+        }
+
+    # ------------------------------------------------------------------
+    @classmethod
+    def from_dict(cls, data: dict) -> SpendEntry:
+        """Deserialise from a dict produced by :meth:`to_dict`."""
+        return cls(
+            id=data["id"],
+            recipient=data["recipient"],
+            amount=data["amount"],
+            timestamp=_ensure_aware(datetime.fromisoformat(data["timestamp"])),
+            note=data.get("note"),
         )
 
 
