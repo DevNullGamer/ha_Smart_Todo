@@ -4,7 +4,7 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions track
 `custom_components/smart_todo/manifest.json`.
 
-## [0.2.0]
+## [0.0.3] - Unreleased
 
 ### Added
 
@@ -28,48 +28,74 @@ All notable changes to this project are documented here. Format follows
   (`<name> Points`), whose state is their net spendable balance (earned minus
   spent) — usable directly in dashboards, history graphs, and automation
   triggers, not just as a nested attribute.
+- New todo-entity attributes: `points_available`, `points_earned_total`,
+  `points_spent_total`, `points_by_recipient` (lifetime gross earned),
+  `points_balance_by_recipient` (net, after spending).
+- **Monthly recurrence** is now actually usable: exposed in the card's
+  recurrence picker (previously listed as "coming soon" and only reachable,
+  buggily, via a raw service call).
+- **Card: task editing.** The card could previously only create tasks; an
+  edit button on each row now opens the same form pre-filled, for
+  reassigning, reprioritizing, changing points, or adjusting recurrence.
+- Card: points badge on task rows, Points/Reward recipient fields in the
+  create/edit form, and roster-backed autocomplete on the Assignee and
+  Reward recipient fields.
+
+### Changed
+
 - **Multi-list targeting**: every service now accepts an optional
   `config_entry_id` field to target a specific Smart Todo list. Single-list
   installs are unaffected; with multiple lists configured, a service call
   without a target now fails with a clear error naming the available lists
   instead of silently operating on whichever list was set up first.
-  **Known limitation:** the bundled Lovelace card does not yet send
-  `config_entry_id` on any of its service calls. On an install with two or
-  more lists, every card action (loading tasks, creating/completing/deleting/
-  snoozing) will hit the new "multiple lists configured" error, even though
-  the card is already configured to point at one specific list's entity. Until
-  the card is updated to resolve and send the right `config_entry_id`
-  automatically, multi-list households should use the service call directly
-  (with `config_entry_id` set) for anything the card can't do, or wait for a
-  card update.
-- New todo-entity attributes: `points_available`, `points_earned_total`,
-  `points_spent_total`, `points_by_recipient` (lifetime gross earned),
-  `points_balance_by_recipient` (net, after spending).
-- Lovelace card: points badge on task rows, Points/Reward recipient fields in
-  the create-task form, and roster-backed autocomplete on the Assignee and
-  Reward recipient fields.
+  **Known limitation:** the bundled card does not yet send `config_entry_id`
+  on any of its calls, so on a multi-list install every card action will hit
+  this new error until the card is updated to resolve one automatically —
+  use the service call directly (with `config_entry_id` set) in the
+  meantime, or wait for a card update.
+- `get_tasks` response now also includes the configured `roster` and each
+  task's structured `recurrence_rule` (alongside the existing human-readable
+  `recurrence` description).
+- Internal: storage now migrates between schema versions properly instead of
+  loading old data ad-hoc — relevant to anyone upgrading from an older
+  release, not something you need to do anything about.
 
 ### Fixed
 
-- A task could earn reward points more than once by being reopened and
-  re-completed; completion now tracks award-eligibility per cycle so a
-  manual reopen can't re-trigger the same reward.
-- `points`/`reward_recipient` service fields were missing from the HA
-  Developer Tools UI form and translation strings despite being accepted by
-  the service schema; both are now fully documented in `services.yaml` and
-  `strings.json`/`translations/en.json`. Same fix applied to `purge_completed`,
-  which had no translation entry at all.
-- A recipient's earned-points history could be silently lost if the task
-  that earned them was later deleted (e.g. via `purge_completed`), which
-  could push their balance negative once compared against their (undeletable)
-  spend history. Earned totals are now persisted independently of task
-  lifetime, with a one-time backfill for upgrading installs.
-- Editing the reward roster could crash the integration on reload (a
-  duplicate static-resource registration) or briefly drop all `smart_todo.*`
-  services; both are fixed.
+- `purge_completed` (added in 0.0.2) was missing from the Developer Tools
+  service picker UI and had no translation entry, even though the service
+  itself worked when called directly.
 
-## [0.1.0]
+## [0.0.2] - 2026-06-10
 
-Initial release: recurring and one-off tasks, priority, assignee, multiple
-recurrence modes, native Home Assistant Todo entity integration, full service
-API, persistent storage, and a custom Lovelace card.
+### Added
+
+- `purge_completed` service to permanently delete completed non-recurring
+  tasks.
+- CI: a GitHub Actions workflow that builds the Lovelace card and runs the
+  Python test suite on every push.
+- Card: a filter for showing/hiding tasks already completed today, and
+  a "show hidden tasks" affordance for tasks excluded by the active filter.
+
+### Fixed
+
+- Card: snoozing a task, and the card's auto-reload after a change, both had
+  bugs that are fixed in this release.
+
+## [0.0.1] - 2026-06-03
+
+Initial release.
+
+- Core integration: one-off and recurring tasks with priority, assignee, due
+  dates, and snoozing, backed by a native Home Assistant Todo entity.
+- Recurrence modes: every N days, N days after completion, specific
+  weekdays, and every other week.
+- Full service API: `create_task`, `complete_task`, `reopen_task`,
+  `update_task`, `snooze_task`, `delete_task`, `recalculate_recurrence`,
+  `get_tasks`.
+- Persistent storage, and diagnostics reporting aggregate statistics only
+  (no task titles, notes, or names).
+- A custom Lovelace card for managing tasks beyond what the native Todo card
+  shows.
+- Example automations, an example dashboard, a recurring-task creation
+  blueprint, and script wrappers for common task-creation patterns.
