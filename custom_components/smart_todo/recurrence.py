@@ -188,34 +188,49 @@ def _next_monthly(
     reference: datetime,
     now: datetime,
 ) -> datetime:
-    """Stub monthly: same day-of-month as reference, one month after now."""
+    """Next occurrence on a fixed day-of-month, at rule.time_of_day, strictly
+    after now — trying the current month before advancing.
+
+    The target day-of-month comes from rule.anchor_date.day — RecurrenceRule
+    requires this for mode='monthly' (matching biweekly_weekdays, and
+    describe_rule()'s existing expectation). reference.day is a fallback
+    used only for a rule bypassing normal construction (e.g. malformed data
+    from an older/external write) — anchor_date.day never changes across
+    recomputation, but reference.day would drift permanently smaller every
+    time a clamp occurs (e.g. day 31 anchored to a due_at that landed on the
+    28th in February would be stuck at 28 forever), so it's a fallback of
+    last resort, not an equivalent alternative.
+
+    The day is clamped to the last day of a shorter target month (e.g. day
+    31 in February becomes the 28th/29th).
+
+    At most 2 iterations are ever needed (the current month, or the next —
+    any later month is unconditionally after `now` regardless of day/time),
+    but the loop is bounded a little higher for defensive headroom.
+    """
     import calendar
 
-    target_day = reference.day
-    # Advance by one month from now
-    year = now.year
-    month = now.month + 1
-    if month > 12:
-        month = 1
-        year += 1
+    target_day = rule.anchor_date.day if rule.anchor_date is not None else reference.day
+    tod = rule.time_of_day or time(0, 0, 0)
 
-    # Clamp day to the last day of the target month
-    last_day = calendar.monthrange(year, month)[1]
-    day = min(target_day, last_day)
-
-    candidate = now.replace(year=year, month=month, day=day)
-    # Ensure strictly after now
-    if candidate <= now:
-        # Advance another month
+    year, month = now.year, now.month
+    for _ in range(4):
+        last_day = calendar.monthrange(year, month)[1]
+        day = min(target_day, last_day)
+        candidate = datetime(
+            year, month, day, tod.hour, tod.minute, tod.second, tzinfo=now.tzinfo
+        )
+        if candidate > now:
+            return candidate
         month += 1
         if month > 12:
             month = 1
             year += 1
-        last_day = calendar.monthrange(year, month)[1]
-        day = min(target_day, last_day)
-        candidate = now.replace(year=year, month=month, day=day)
 
-    return candidate
+    _LOGGER.warning(
+        "next_due_date: monthly search exceeded 4 months — returning now + 30 days"
+    )
+    return now + timedelta(days=30)
 
 
 # ---------------------------------------------------------------------------

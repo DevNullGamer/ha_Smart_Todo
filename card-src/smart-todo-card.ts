@@ -156,6 +156,11 @@ export class SmartTodoCard extends LitElement {
   @state() private _error?: string;
 
   @state() private _showForm = false;
+  @state() private _editingTaskId?: string;
+  // Captured when the edit form opens; used to detect whether the user
+  // actually changed the recurrence rule before deciding whether to send it
+  // in the patch (see _submitForm).
+  private _editingOriginalRecurrence: RecurrenceRuleDict | null = null;
   @state() private _formTitle = '';
   @state() private _formDue = '';
   @state() private _formPriority = 2;
@@ -744,7 +749,7 @@ export class SmartTodoCard extends LitElement {
 
         ${this._showForm ? html`
           <div class="form-panel">
-            <div class="form-title">Add task</div>
+            <div class="form-title">${this._editingTaskId ? 'Edit task' : 'Add task'}</div>
 
             <!-- Title (required) -->
             <label class="form-label">Title *</label>
@@ -804,6 +809,7 @@ export class SmartTodoCard extends LitElement {
               <option value="interval_days">Every N days</option>
               <option value="rolling_days">N days after completion</option>
               <option value="biweekly">Every other week</option>
+              <option value="monthly">Monthly</option>
             </select>
 
             <!-- Conditional sub-fields -->
@@ -811,10 +817,17 @@ export class SmartTodoCard extends LitElement {
 
             <!-- Form actions -->
             <div class="form-actions">
-              <button class="form-btn cancel" @click=${() => this._showForm = false}>Cancel</button>
+              <button class="form-btn cancel"
+                @click=${() => {
+                  this._showForm = false;
+                  this._editingTaskId = undefined;
+                  this._editingOriginalRecurrence = null;
+                }}>Cancel</button>
               <button class="form-btn submit" ?disabled=${this._formSubmitting || !this._formTitle.trim()}
                 @click=${() => this._submitForm()}>
-                ${this._formSubmitting ? 'Adding…' : 'Add task'}
+                ${this._formSubmitting
+                  ? (this._editingTaskId ? 'Saving…' : 'Adding…')
+                  : (this._editingTaskId ? 'Save changes' : 'Add task')}
               </button>
             </div>
           </div>
@@ -826,6 +839,8 @@ export class SmartTodoCard extends LitElement {
   }
   private _openForm(): void {
     this._showForm = true;
+    this._editingTaskId = undefined;
+    this._editingOriginalRecurrence = null;
     this._formTitle = '';
     this._formDue = '';
     this._formPriority = 2;
@@ -838,6 +853,47 @@ export class SmartTodoCard extends LitElement {
     this._formIntervalDays = 7;
     this._formAnchorDate = new Date().toISOString().slice(0, 10); // today YYYY-MM-DD
     this._formSubmitting = false;
+  }
+
+  private _openEditForm(task: Task): void {
+    this._showForm = true;
+    this._editingTaskId = task.id;
+    this._formSubmitting = false;
+
+    this._formTitle = task.title;
+    this._formDue = task.due_at ? task.due_at.slice(0, 10) : '';
+    this._formPriority = task.priority;
+    this._formAssignee = task.assignee ?? '';
+    this._formPoints = task.points;
+    this._formRewardRecipient = task.reward_recipient ?? '';
+
+    const rule = task.recurrence_rule ?? null;
+    this._editingOriginalRecurrence = rule;
+    this._formWeekdays = rule?.weekdays ?? [];
+    this._formTime = rule?.time_of_day ? rule.time_of_day.slice(0, 5) : '09:00';
+    this._formIntervalDays = rule?.interval_days ?? 7;
+    this._formAnchorDate = rule?.anchor_date ?? new Date().toISOString().slice(0, 10);
+
+    switch (rule?.mode) {
+      case 'weekdays':
+      case 'weekly':
+        this._formRecurrenceType = 'weekly';
+        break;
+      case 'biweekly_weekdays':
+        this._formRecurrenceType = 'biweekly';
+        break;
+      case 'monthly':
+        this._formRecurrenceType = 'monthly';
+        break;
+      case 'rolling_days':
+        this._formRecurrenceType = 'rolling_days';
+        break;
+      case 'interval_days':
+        this._formRecurrenceType = 'interval_days';
+        break;
+      default:
+        this._formRecurrenceType = 'none';
+    }
   }
 
   private _renderRecurrenceSubFields() {
@@ -870,6 +926,16 @@ export class SmartTodoCard extends LitElement {
             .value=${String(this._formIntervalDays)}
             @input=${(e: Event) => this._formIntervalDays = parseInt((e.target as HTMLInputElement).value) || 1} />
           <span class="form-hint">days${this._formRecurrenceType === 'rolling_days' ? ' after completion' : ''}</span>
+        `;
+      case 'monthly':
+        return html`
+          <label class="form-label">Day of month</label>
+          <input class="form-input" type="date" .value=${this._formAnchorDate}
+            @input=${(e: Event) => this._formAnchorDate = (e.target as HTMLInputElement).value} />
+          <span class="form-hint">Only the day number is used — pick any 15th for "the 15th of every month"</span>
+          <label class="form-label">Time</label>
+          <input class="form-input" type="time" .value=${this._formTime}
+            @input=${(e: Event) => this._formTime = (e.target as HTMLInputElement).value} />
         `;
       default:
         return nothing;
@@ -907,37 +973,113 @@ export class SmartTodoCard extends LitElement {
           time_of_day: timeStr,
           anchor_date: this._formAnchorDate,
         };
+      case 'monthly':
+        return {
+          mode: 'monthly',
+          anchor_date: this._formAnchorDate,
+          time_of_day: timeStr,
+        };
       default:
         return null;
     }
+  }
+
+  /**
+   * Structural equality for recurrence rules, used to decide whether an edit
+   * actually changed the recurrence (see _submitForm). _buildRecurrenceDict()
+   * only includes the fields relevant to its mode (a sparse dict), while
+   * task.recurrence_rule (RecurrenceRule.to_dict() in models.py) always
+   * includes all six fields with null for unused ones — normalize both to
+   * the same shape, and sort weekdays, before comparing so a reorder or a
+   * missing-vs-null key difference doesn't register as a change.
+   */
+  private _recurrenceEquals(
+    a: Record<string, unknown> | null,
+    b: RecurrenceRuleDict | null,
+  ): boolean {
+    if (a === null && b === null) return true;
+    if (a === null || b === null) return false;
+    const norm = (r: Record<string, unknown>) => JSON.stringify({
+      mode: r.mode ?? null,
+      interval_days: r.interval_days ?? null,
+      weekdays: Array.isArray(r.weekdays) ? [...(r.weekdays as number[])].sort((x, y) => x - y) : null,
+      week_parity: r.week_parity ?? null,
+      anchor_date: r.anchor_date ?? null,
+      time_of_day: r.time_of_day ?? null,
+    });
+    return norm(a) === norm(b as unknown as Record<string, unknown>);
   }
 
   private async _submitForm(): Promise<void> {
     if (!this._formTitle.trim() || !this._hass) return;
     this._formSubmitting = true;
 
+    const isEditing = this._editingTaskId !== undefined;
+    const recurrence = this._buildRecurrenceDict();
     const data: Record<string, unknown> = {
       title: this._formTitle.trim(),
       priority: this._formPriority,
     };
-    if (this._formDue) data['due_at'] = `${this._formDue}T00:00:00`;
-    if (this._formAssignee.trim()) data['assignee'] = this._formAssignee.trim();
-    if (this._formPoints > 0) data['points'] = this._formPoints;
-    // Matches the form's render-gate (reward recipient is only shown/editable
-    // when Points > 0) — otherwise a recipient typed before resetting Points
-    // back to 0 would silently submit anyway even though the field is hidden.
-    if (this._formPoints > 0 && this._formRewardRecipient.trim()) {
-      data['reward_recipient'] = this._formRewardRecipient.trim();
+
+    if (isEditing) {
+      // Unlike create (below), an edit must be able to explicitly CLEAR a
+      // field — reduce points back to 0, remove a due date, drop the
+      // recurrence — not just add one. Send every editable field with its
+      // current value, using null for "empty," so update_task's patch
+      // semantics (key absent = unchanged, key present = set/clear) do the
+      // right thing either way.
+      data['task_id'] = this._editingTaskId;
+      data['assignee'] = this._formAssignee.trim() || null;
+      data['points'] = this._formPoints;
+      data['reward_recipient'] =
+        this._formPoints > 0 && this._formRewardRecipient.trim()
+          ? this._formRewardRecipient.trim()
+          : null;
+      // Only send recurrence if it actually changed. update_task
+      // unconditionally recomputes due_at from `now` whenever "recurrence"
+      // is present in the patch at all (coordinator.py) — sending back an
+      // unchanged rule on every edit (e.g. just fixing a typo in the title)
+      // would silently reset a fixed-cadence task's due-date anchor to
+      // "now + interval" instead of preserving its existing schedule.
+      if (!this._recurrenceEquals(recurrence, this._editingOriginalRecurrence)) {
+        data['recurrence'] = recurrence;
+      }
+      // update_task applies an explicit due_at patch AFTER recomputing it
+      // from the recurrence rule (coordinator.py), so sending both would let
+      // a stale pre-filled due_at silently overwrite the freshly recalculated
+      // one. due_at is only meaningfully user-controlled for non-recurring
+      // tasks — for recurring ones, leave it to the recurrence recalculation.
+      if (!recurrence) {
+        data['due_at'] = this._formDue ? `${this._formDue}T00:00:00` : null;
+      }
+    } else {
+      if (this._formDue) data['due_at'] = `${this._formDue}T00:00:00`;
+      if (this._formAssignee.trim()) data['assignee'] = this._formAssignee.trim();
+      if (this._formPoints > 0) data['points'] = this._formPoints;
+      // Matches the form's render-gate (reward recipient is only shown/editable
+      // when Points > 0) — otherwise a recipient typed before resetting Points
+      // back to 0 would silently submit anyway even though the field is hidden.
+      if (this._formPoints > 0 && this._formRewardRecipient.trim()) {
+        data['reward_recipient'] = this._formRewardRecipient.trim();
+      }
+      if (recurrence) data['recurrence'] = recurrence;
     }
-    const recurrence = this._buildRecurrenceDict();
-    if (recurrence) data['recurrence'] = recurrence;
 
     try {
-      await this._hass.callService('smart_todo', 'create_task', data, undefined, false);
+      await this._hass.callService(
+        'smart_todo',
+        isEditing ? 'update_task' : 'create_task',
+        data,
+        undefined,
+        false,
+      );
       this._showForm = false;
+      this._editingTaskId = undefined;
+      this._editingOriginalRecurrence = null;
       void this._fetchTasks(true);
     } catch (err) {
-      this._error = `Failed to create task: ${err instanceof Error ? err.message : String(err)}`;
+      const verb = isEditing ? 'update' : 'create';
+      this._error = `Failed to ${verb} task: ${err instanceof Error ? err.message : String(err)}`;
     } finally {
       this._formSubmitting = false;
     }
@@ -1125,6 +1267,10 @@ export class SmartTodoCard extends LitElement {
                 @click=${() => this._completeTask(task.id)}>✓</button>
             ` : nothing}
 
+            <!-- Edit button -->
+            <button class="action-btn edit" title="Edit"
+              @click=${() => this._openEditForm(task)}>✎</button>
+
             <!-- Delete button — two-tap confirmation -->
             <button class="action-btn delete ${this._confirmDeleteId === task.id ? 'confirming' : ''}"
               title="${this._confirmDeleteId === task.id ? 'Tap again to confirm' : 'Delete'}"
@@ -1147,6 +1293,18 @@ export class SmartTodoCard extends LitElement {
   }
 }
 
+// Structured recurrence rule (RecurrenceRule.to_dict() in models.py) —
+// needed to prefill the edit form's recurrence sub-fields; the plain
+// `recurrence` string on Task is only a human-readable description.
+export interface RecurrenceRuleDict {
+  mode: string;
+  interval_days: number | null;
+  weekdays: number[] | null;
+  week_parity: string | null;
+  anchor_date: string | null;   // "YYYY-MM-DD"
+  time_of_day: string | null;   // "HH:MM:SS"
+}
+
 // HA type for task row (populated in Stage 3)
 export interface Task {
   id: string;
@@ -1163,6 +1321,7 @@ export interface Task {
   overdue: boolean;
   snoozed_until?: string | null;
   recurrence?: string | null;
+  recurrence_rule?: RecurrenceRuleDict | null;
   last_completed_at?: string | null;
   created_at: string;
   sort_order: number;

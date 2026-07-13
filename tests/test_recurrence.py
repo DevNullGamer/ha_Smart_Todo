@@ -354,6 +354,80 @@ class TestNextDueDateMonthly:
         result = next_due_date(rule, reference, now)
         assert result.tzinfo is not None
 
+    def test_monthly_stays_in_current_month_if_day_not_yet_passed(self):
+        """now=Jul 1, target day=28 -> Jul 28 (same month), not Aug 28.
+
+        Regression test: the original implementation unconditionally jumped
+        to next month regardless of whether the target day-of-month was
+        still ahead in the current month.
+        """
+        now = dt(2024, 7, 1, 0, 0, 0)
+        rule = RecurrenceRule.__new__(RecurrenceRule)
+        object.__setattr__(rule, "mode", "monthly")
+        object.__setattr__(rule, "interval_days", None)
+        object.__setattr__(rule, "weekdays", None)
+        object.__setattr__(rule, "week_parity", None)
+        object.__setattr__(rule, "anchor_date", date(2024, 1, 28))
+        object.__setattr__(rule, "time_of_day", None)
+
+        result = next_due_date(rule, now, now)
+
+        assert result.year == 2024
+        assert result.month == 7
+        assert result.day == 28
+
+    def test_monthly_uses_anchor_date_over_reference(self):
+        """anchor_date.day takes priority over reference.day when both are set."""
+        now = dt(2024, 3, 1, 0, 0, 0)
+        reference = dt(2024, 1, 10, 0, 0, 0)  # day=10, should be ignored
+        rule = RecurrenceRule.__new__(RecurrenceRule)
+        object.__setattr__(rule, "mode", "monthly")
+        object.__setattr__(rule, "interval_days", None)
+        object.__setattr__(rule, "weekdays", None)
+        object.__setattr__(rule, "week_parity", None)
+        object.__setattr__(rule, "anchor_date", date(2024, 1, 20))  # day=20
+        object.__setattr__(rule, "time_of_day", None)
+
+        result = next_due_date(rule, reference, now)
+
+        assert result.month == 3
+        assert result.day == 20
+
+    def test_monthly_uses_time_of_day(self):
+        """The result's time must come from rule.time_of_day, not from `now`.
+
+        now is deliberately given an unrelated time (22:00) so this fails if
+        the implementation ever regresses to reusing now's own time-of-day
+        (as the original stub did) instead of applying rule.time_of_day.
+        """
+        now = dt(2024, 7, 1, 22, 0, 0)
+        rule = RecurrenceRule.__new__(RecurrenceRule)
+        object.__setattr__(rule, "mode", "monthly")
+        object.__setattr__(rule, "interval_days", None)
+        object.__setattr__(rule, "weekdays", None)
+        object.__setattr__(rule, "week_parity", None)
+        object.__setattr__(rule, "anchor_date", date(2024, 1, 15))
+        object.__setattr__(rule, "time_of_day", time(9, 0, 0))
+
+        result = next_due_date(rule, now, now)
+
+        assert result.month == 7
+        assert result.day == 15
+        assert result.hour == 9
+        assert result.minute == 0
+
+    def test_monthly_construction_requires_anchor_date(self):
+        """Real construction (not the __new__ bypass used above) must reject
+        mode='monthly' with no anchor_date — matching biweekly_weekdays'
+        existing requirement, and closing off the only way a rule with a
+        permanently-drifting day-of-month fallback could be created going
+        forward (see _next_monthly's docstring)."""
+        with pytest.raises(ValueError):
+            RecurrenceRule(mode="monthly", anchor_date=None)
+
+        # A real anchor_date is accepted without error.
+        RecurrenceRule(mode="monthly", anchor_date=date(2024, 1, 15))
+
 
 # ---------------------------------------------------------------------------
 # is_overdue

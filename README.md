@@ -5,7 +5,7 @@ A self-contained recurring task and todo manager for Home Assistant, with HACS s
 ## Features
 
 - One-off and recurring tasks with flexible schedules
-- Recurrence modes: every N days, N days after completion, specific weekdays, every other week, weekly, monthly (coming soon)
+- Recurrence modes: every N days, N days after completion, specific weekdays, every other week, weekly, monthly
 - Native Home Assistant Todo entity integration
 - Completion event firing for automations
 - Optional reward points per task with recipient-based tracking and entity attributes
@@ -152,7 +152,7 @@ See `custom_components/smart_todo/example_dashboard.yaml` for a ready-to-use das
 | `weekdays` | `weekdays`, `time_of_day` | Every Mon+Wed at 09:00 |
 | `weekly` | `weekdays`, `time_of_day` | Every Friday at 08:00 |
 | `biweekly_weekdays` | `weekdays`, `week_parity`, `anchor_date` | Every other Tuesday |
-| `monthly` | — | Monthly (stub, coming soon) |
+| `monthly` | `anchor_date`, `time_of_day` | Every 15th at 09:00 (day comes from `anchor_date`; month/year are ignored — only the day-of-month is used, clamped to the last day of shorter months) |
 
 ## License
 

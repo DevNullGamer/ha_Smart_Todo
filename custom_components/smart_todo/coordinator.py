@@ -503,6 +503,17 @@ class SmartTodoCoordinator(
                         if definition.recurrence
                         else None
                     ),
+                    # Structured form (mode/interval_days/weekdays/week_parity/
+                    # anchor_date/time_of_day) alongside the human-readable
+                    # "recurrence" description above — the card's edit form
+                    # needs the structured shape to prefill recurrence
+                    # sub-fields; "recurrence" stays a plain description for
+                    # backward compatibility with existing consumers.
+                    "recurrence_rule": (
+                        definition.recurrence.to_dict()
+                        if definition.recurrence
+                        else None
+                    ),
                     "last_completed_at": (
                         state.last_completed_at.isoformat(timespec="seconds")
                         if state.last_completed_at

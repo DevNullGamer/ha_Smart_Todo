@@ -28,9 +28,9 @@ class RecurrenceRule:
 
     # ------------------------------------------------------------------
     def __post_init__(self) -> None:
-        if self.mode == "biweekly_weekdays" and self.anchor_date is None:
+        if self.mode in ("biweekly_weekdays", "monthly") and self.anchor_date is None:
             raise ValueError(
-                "RecurrenceRule with mode='biweekly_weekdays' requires anchor_date."
+                f"RecurrenceRule with mode='{self.mode}' requires anchor_date."
             )
         if self.mode in ("interval_days", "rolling_days") and self.interval_days is None:
             raise ValueError(
