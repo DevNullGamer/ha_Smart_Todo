@@ -1,7 +1,9 @@
 """Persistent storage layer for the Smart Todo integration."""
 from __future__ import annotations
 
+import copy
 import logging
+from collections.abc import Callable
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
@@ -11,14 +13,84 @@ from .models import SpendEntry, TaskDefinition, TaskRuntimeState
 
 _LOGGER = logging.getLogger(__name__)
 
+# Home Assistant's own Store envelope version, passed to Store's constructor
+# below — intentionally kept fixed at 1 forever, entirely separate from
+# STORAGE_VERSION (this integration's own nested app-level schema version,
+# tracked in data["version"] and handled by _MIGRATIONS below).
+#
+# SmartTodoStore never overrides Store's _async_migrate_func. HA's Store only
+# tolerates an envelope version mismatch silently when just the *minor*
+# version differs (or a migrate_func is provided) — a *major* version
+# mismatch with the default (NotImplementedError-raising) migrate_func
+# propagates out of Store.async_load() as an unhandled exception. Since this
+# integration already does all of its own schema evolution via the nested
+# "version" field / _MIGRATIONS, the outer envelope version must never
+# change, or every existing install would fail to load on upgrade.
+_HA_STORE_VERSION = 1
+
+
+def _migrate_v1_to_v2(data: dict) -> dict:
+    """v1 -> v2: add the spend ledger (spend_entries, earned_totals,
+    recipient_display_names).
+
+    Backfills earned_totals/recipient_display_names from historical per-task
+    points_earned when those keys aren't already present. Idempotent: every
+    real install's data already carries these keys (they were written
+    ad-hoc, without a version bump, before this migration mechanism
+    existed) — for those, this only bumps the version number.
+    """
+    # Deep, not shallow: _MIGRATIONS entries are documented as pure
+    # dict -> dict functions, so nested structures (definitions/states) must
+    # not alias the caller's dict either, even though this particular
+    # migration only reads them today — a future migration that needs to
+    # transform something inside them shouldn't have to remember to copy.
+    data = copy.deepcopy(data)
+    data.setdefault("spend_entries", [])
+
+    if "earned_totals" not in data or "recipient_display_names" not in data:
+        definitions_raw: dict = data.get("definitions") or {}
+        states_raw: dict = data.get("states") or {}
+
+        earned_totals: dict[str, int] = {}
+        display_names: dict[str, str] = {}
+        for task_id, state_raw in states_raw.items():
+            points_earned = state_raw.get("points_earned", 0)
+            if not points_earned or points_earned <= 0:
+                continue
+            definition_raw = definitions_raw.get(task_id)
+            if definition_raw is None:
+                continue
+            who = definition_raw.get("reward_recipient") or definition_raw.get("assignee")
+            if who is None:
+                continue
+            key = who.strip().lower()
+            earned_totals[key] = earned_totals.get(key, 0) + points_earned
+            display_names.setdefault(key, who.strip())
+
+        data.setdefault("earned_totals", earned_totals)
+        data.setdefault("recipient_display_names", display_names)
+
+    data["version"] = 2
+    return data
+
+
+# Registered migrations, keyed by the version they migrate FROM. New schema
+# changes that need a real one-time transform (not just a new field with a
+# safe default — TaskDefinition/TaskRuntimeState's own `.get(key, default)`
+# in from_dict already handles those) register a new entry here, rather than
+# another ad-hoc inline backfill in async_load.
+_MIGRATIONS: dict[int, Callable[[dict], dict]] = {
+    1: _migrate_v1_to_v2,
+}
+
 
 class SmartTodoStore:
     """Wrapper around HA's Store that handles load, save, and schema migration.
 
-    Stored data shape (version 1)::
+    Stored data shape (current version)::
 
         {
-            "version": 1,
+            "version": 2,
             "definitions": {
                 "<task_id>": { ...TaskDefinition.to_dict() }
             },
@@ -26,15 +98,12 @@ class SmartTodoStore:
                 "<task_id>": { ...TaskRuntimeState.to_dict() }
             },
             "spend_entries": [ ...SpendEntry.to_dict() ],
-            "earned_totals": { "<normalized recipient name>": int }
+            "earned_totals": { "<normalized recipient name>": int },
+            "recipient_display_names": { "<normalized recipient name>": str }
         }
 
     The ``overdue`` field is a derived property on :class:`TaskRuntimeState` and
     is intentionally excluded from ``to_dict()``; this class never adds it back.
-
-    ``spend_entries``/``earned_totals`` were added after the initial release
-    without bumping ``STORAGE_VERSION`` — loaded additively (``.get(key, ...)``),
-    matching how ``points``/``reward_recipient`` were added to task definitions.
 
     ``earned_totals`` is intentionally NOT derived from task state at read
     time: tasks (and the ``points_earned`` recorded on their runtime state)
@@ -46,7 +115,7 @@ class SmartTodoStore:
     """
 
     def __init__(self, hass: HomeAssistant) -> None:
-        self._store: Store[dict] = Store(hass, STORAGE_VERSION, STORAGE_KEY)
+        self._store: Store[dict] = Store(hass, _HA_STORE_VERSION, STORAGE_KEY)
         self._definitions: dict[str, TaskDefinition] = {}
         self._states: dict[str, TaskRuntimeState] = {}
         self._spend_entries: list[SpendEntry] = []
@@ -120,29 +189,12 @@ class SmartTodoStore:
                     exc_info=True,
                 )
 
-        if "earned_totals" in data:
-            earned_totals: dict[str, int] = dict(data["earned_totals"] or {})
-            display_names: dict[str, str] = dict(data.get("recipient_display_names") or {})
-        else:
-            # First load after upgrading from a version without a persisted
-            # ledger (chg001) — backfill once from historical per-task
-            # points_earned so already-accrued totals aren't lost. After this
-            # save, the "earned_totals" key always exists (even if empty), so
-            # this branch never re-fires and never double-counts.
-            earned_totals = {}
-            display_names = {}
-            for task_id, state in states.items():
-                if state.points_earned <= 0:
-                    continue
-                definition = definitions.get(task_id)
-                if definition is None:
-                    continue
-                who = definition.reward_recipient or definition.assignee
-                if who is None:
-                    continue
-                key = who.strip().lower()
-                earned_totals[key] = earned_totals.get(key, 0) + state.points_earned
-                display_names.setdefault(key, who.strip())
+        # By this point data["version"] == STORAGE_VERSION — either it
+        # already was, or _async_migrate() just brought it up to date — so
+        # earned_totals/recipient_display_names/spend_entries are guaranteed
+        # present (every migration ensures its own target shape).
+        earned_totals: dict[str, int] = dict(data.get("earned_totals") or {})
+        display_names: dict[str, str] = dict(data.get("recipient_display_names") or {})
 
         self._definitions = definitions
         self._states = states
@@ -173,19 +225,45 @@ class SmartTodoStore:
     # ------------------------------------------------------------------
 
     async def _async_migrate(self, data: dict) -> None:
-        """Migrate stored data from an older schema version.
+        """Run registered migrations sequentially until data reaches STORAGE_VERSION.
 
-        Currently a stub: logs a warning and allows a best-effort load of the
-        existing data.  Concrete migration logic should be added here when the
-        schema is bumped beyond version 1.
+        Each migration in _MIGRATIONS is a pure ``dict -> dict`` function,
+        keyed by the version it migrates FROM, and sets the new version on
+        its output. The fully migrated dict is persisted once at the end;
+        the caller (async_load) re-reads from the store afterward.
+
+        Raises RuntimeError rather than silently proceeding if a required
+        migration is missing (e.g. the integration was downgraded after
+        being run with a newer version) or if a migration fails to advance
+        the version number (a bug in that migration, which would otherwise
+        loop forever). async_load has no fallback for a partially-migrated
+        dict — better to fail loudly during setup than silently drop the
+        recipient point ledger on the next save.
         """
-        from_version = data.get("version", 0)
-        _LOGGER.warning(
-            "smart_todo: migration from storage version %d to %d is not yet "
-            "implemented — attempting best-effort load of existing data",
-            from_version,
+        original_version = data.get("version", 0)
+        while data.get("version", 0) < STORAGE_VERSION:
+            from_version = data.get("version", 0)
+            migration = _MIGRATIONS.get(from_version)
+            if migration is None:
+                raise RuntimeError(
+                    f"smart_todo: no migration registered from storage version "
+                    f"{from_version} to {STORAGE_VERSION} — refusing to load "
+                    f"(this usually means the integration was downgraded after "
+                    f"running with a newer version)"
+                )
+            data = migration(data)
+            if data.get("version", 0) <= from_version:
+                raise RuntimeError(
+                    f"smart_todo: migration from version {from_version} did not "
+                    f"advance the stored version — aborting to avoid an infinite loop"
+                )
+
+        _LOGGER.info(
+            "smart_todo: migrated storage from version %d to %d",
+            original_version,
             STORAGE_VERSION,
         )
+        await self._store.async_save(data)
 
     # ------------------------------------------------------------------
     # Properties — return copies so callers cannot mutate internal state

@@ -11,7 +11,9 @@ CONF_ROSTER = "roster"
 PLATFORMS: list[Platform] = [Platform.TODO, Platform.SENSOR]
 
 STORAGE_KEY = "smart_todo.tasks"
-STORAGE_VERSION = 1
+# v1 -> v2: added the spend ledger (spend_entries, earned_totals,
+# recipient_display_names) — see storage.py's _MIGRATIONS registry.
+STORAGE_VERSION = 2
 
 # Priority constants
 PRIORITY_LOW = 1
