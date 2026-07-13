@@ -23,6 +23,13 @@ development and caught a real bug at the time:
   through hass.services.async_call (the real service layer: schema
   validation, _get_coordinator's config_entry_id resolution) rather than
   calling coordinator methods directly, unlike the other three tests above.
+- test_complete_task_splits_points_across_recipients /
+  test_complete_task_explicit_no_recipients_awards_nothing (chg014): an
+  unassigned, points-bearing task has no auto-resolvable recipient — the
+  card now prompts for who completed it, sending an explicit `recipients`
+  list (multi-person split) or an explicit empty list ("don't award").
+  Both go through hass.services.async_call to also exercise the new
+  COMPLETE_TASK_SCHEMA/roster-validation path in services.py.
 """
 from __future__ import annotations
 
@@ -134,3 +141,45 @@ async def test_config_entry_id_targets_specific_list(hass: HomeAssistant) -> Non
     coordinator_b = hass.data[DOMAIN][entry_b.entry_id]
     assert coordinator_a.data == {}
     assert len(coordinator_b.data) == 1
+
+
+async def test_complete_task_splits_points_across_recipients(hass: HomeAssistant) -> None:
+    """An unassigned points-bearing task completed with an explicit multi-
+    person `recipients` list must split the points evenly (2dp), with the
+    rounding remainder folded into the last recipient so shares sum exactly
+    to the task's point value."""
+    entry = await _setup_entry(hass, options={"roster": ["Mina", "Oskar", "Elin"]})
+    coordinator = hass.data[DOMAIN][entry.entry_id]
+
+    task_id = await coordinator.async_create_task({"title": "Rake leaves", "points": 10})
+
+    await hass.services.async_call(
+        DOMAIN,
+        "complete_task",
+        {"task_id": task_id, "recipients": ["Mina", "Oskar", "Elin"]},
+        blocking=True,
+    )
+
+    assert coordinator.get_balance("Mina") == 3.33
+    assert coordinator.get_balance("Oskar") == 3.33
+    assert coordinator.get_balance("Elin") == 3.34
+    total = coordinator.get_balance("Mina") + coordinator.get_balance("Oskar") + coordinator.get_balance("Elin")
+    assert round(total, 2) == 10.0
+
+
+async def test_complete_task_explicit_no_recipients_awards_nothing(hass: HomeAssistant) -> None:
+    """An empty `recipients` list (the card's "don't award points" choice)
+    must complete the task without crediting anyone, even though it has a
+    positive point value."""
+    entry = await _setup_entry(hass)
+    coordinator = hass.data[DOMAIN][entry.entry_id]
+
+    task_id = await coordinator.async_create_task({"title": "Wash dishes", "points": 5})
+
+    await hass.services.async_call(
+        DOMAIN, "complete_task", {"task_id": task_id, "recipients": []}, blocking=True
+    )
+
+    assert coordinator.data[task_id][1].completed is True
+    assert coordinator.get_balance("Mina") == 0
+    assert coordinator.get_known_recipients() == []

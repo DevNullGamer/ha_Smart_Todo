@@ -68,6 +68,16 @@ TASK_ID_SCHEMA = _service_schema(
     }
 )
 
+COMPLETE_TASK_SCHEMA = _service_schema(
+    {
+        vol.Required("task_id"): cv.string,
+        # Overrides the normal reward_recipient/assignee auto-resolution:
+        # points split evenly across these people. Omit to keep today's
+        # behaviour; pass an empty list to explicitly award nobody.
+        vol.Optional("recipients"): vol.All(cv.ensure_list, [cv.string]),
+    }
+)
+
 UPDATE_TASK_SCHEMA = _service_schema(
     {
         vol.Required("task_id"): cv.string,
@@ -230,7 +240,11 @@ async def async_create_task(call: ServiceCall) -> None:
 async def async_complete_task(call: ServiceCall) -> None:
     """Handle the complete_task service call."""
     coordinator = _get_coordinator(call.hass, call)
-    await coordinator.async_complete_task(call.data["task_id"])
+    recipients = call.data.get("recipients")
+    if recipients is not None:
+        for name in recipients:
+            _validate_recipient(coordinator, name, "recipients")
+    await coordinator.async_complete_task(call.data["task_id"], recipients=recipients)
 
 
 async def async_reopen_task(call: ServiceCall) -> None:
@@ -330,7 +344,7 @@ def async_register_services(hass: HomeAssistant) -> None:
         DOMAIN, SERVICE_CREATE_TASK, async_create_task, schema=CREATE_TASK_SCHEMA
     )
     hass.services.async_register(
-        DOMAIN, SERVICE_COMPLETE_TASK, async_complete_task, schema=TASK_ID_SCHEMA
+        DOMAIN, SERVICE_COMPLETE_TASK, async_complete_task, schema=COMPLETE_TASK_SCHEMA
     )
     hass.services.async_register(
         DOMAIN, SERVICE_REOPEN_TASK, async_reopen_task, schema=TASK_ID_SCHEMA

@@ -79,6 +79,16 @@ complete_task:
       example: "abc-123"
       selector:
         text:
+    recipients:
+      name: Recipients
+      description: >-
+        Override who earns this task's points, splitting them evenly across
+        everyone listed. Omit to use the task's own reward_recipient/assignee;
+        pass an empty list to explicitly award nobody.
+      required: false
+      selector:
+        text:
+          multiple: true
     config_entry_id: *config_entry_id_field
 
 reopen_task:

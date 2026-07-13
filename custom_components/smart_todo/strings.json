@@ -56,6 +56,7 @@
       "description": "Marks a task as completed and triggers recurrence recalculation.",
       "fields": {
         "task_id": { "name": "Task ID", "description": "Unique task identifier." },
+        "recipients": { "name": "Recipients", "description": "Override who earns this task's points, splitting them evenly. Omit to use the task's own reward_recipient/assignee; pass an empty list to award nobody." },
         "config_entry_id": { "name": "List", "description": "Which Smart Todo list to target. Only needed if you have more than one." }
       }
     },

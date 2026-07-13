@@ -140,7 +140,8 @@ class TaskRuntimeState:
     last_completed_at: datetime | None = None  # tz-aware; stored as ISO string or None
     snoozed_until: datetime | None = None    # tz-aware; stored as ISO string or None
     sort_order: int = 0                      # drag-to-reorder position
-    points_earned: int = 0                   # cumulative points already earned
+    points_earned: int | float = 0           # cumulative points already earned;
+                                              # float only when a split award occurred
     points_awarded_this_cycle: bool = False  # guards against re-earning via reopen
 
     # ------------------------------------------------------------------

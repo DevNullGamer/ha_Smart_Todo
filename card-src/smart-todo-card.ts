@@ -182,6 +182,13 @@ export class SmartTodoCard extends LitElement {
   @state() private _snoozeTime = '08:00';
   @state() private _showHidden = false;
 
+  // Recipient prompt — shown on completing a points-bearing task that has
+  // neither an assignee nor a reward_recipient, so there's no one to
+  // auto-credit.
+  @state() private _pointsPromptTaskId?: string;
+  @state() private _pointsPromptSelected: string[] = [];
+  @state() private _pointsPromptManualName = '';
+
   private _lastUpdated?: string;
   private _debounceTimer?: ReturnType<typeof setTimeout>;
 
@@ -301,6 +308,7 @@ export class SmartTodoCard extends LitElement {
     }
     .form-actions {
       display: flex;
+      flex-wrap: wrap;
       justify-content: flex-end;
       gap: 8px;
       margin-top: 12px;
@@ -509,6 +517,19 @@ export class SmartTodoCard extends LitElement {
     }
     .snooze-date { flex: 2; }
     .snooze-time { flex: 1; }
+    .points-roster-picker {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .points-roster-option {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.85rem;
+      color: var(--primary-text-color);
+      cursor: pointer;
+    }
     .filter-expand-btn {
       background: none;
       border: 1px solid var(--divider-color, rgba(255,255,255,0.15));
@@ -1085,13 +1106,86 @@ export class SmartTodoCard extends LitElement {
     }
   }
 
-  private async _completeTask(taskId: string): Promise<void> {
+  private async _completeTask(task: Task): Promise<void> {
+    // Unassigned + points-bearing tasks have no one to auto-credit — ask who
+    // actually did it instead of silently completing with no points awarded.
+    if (!task.assignee && !task.reward_recipient && task.points > 0) {
+      this._pointsPromptTaskId = task.id;
+      this._pointsPromptSelected = [];
+      this._pointsPromptManualName = '';
+      return;
+    }
+    await this._submitCompleteTask(task.id);
+  }
+
+  private async _submitCompleteTask(taskId: string, recipients?: string[]): Promise<void> {
     try {
-      await this._hass.callService('smart_todo', 'complete_task', { task_id: taskId }, undefined, false);
+      const data: Record<string, unknown> = { task_id: taskId };
+      if (recipients !== undefined) data['recipients'] = recipients;
+      await this._hass.callService('smart_todo', 'complete_task', data, undefined, false);
+      this._pointsPromptTaskId = undefined;
       void this._fetchTasks(true);
     } catch (err) {
       this._error = `Failed to complete task: ${err instanceof Error ? err.message : String(err)}`;
     }
+  }
+
+  private _togglePromptRecipient(name: string): void {
+    this._pointsPromptSelected = this._pointsPromptSelected.includes(name)
+      ? this._pointsPromptSelected.filter(n => n !== name)
+      : [...this._pointsPromptSelected, name];
+  }
+
+  private _confirmPointsPrompt(): void {
+    if (!this._pointsPromptTaskId) return;
+    const manual = this._pointsPromptManualName.trim();
+    const combined = manual
+      ? [...this._pointsPromptSelected, manual]
+      : this._pointsPromptSelected;
+    const recipients = [...new Set(combined.map(n => n.trim()).filter(Boolean))];
+    if (recipients.length === 0) return;
+    void this._submitCompleteTask(this._pointsPromptTaskId, recipients);
+  }
+
+  private _declinePointsPrompt(): void {
+    if (!this._pointsPromptTaskId) return;
+    void this._submitCompleteTask(this._pointsPromptTaskId, []);
+  }
+
+  private _renderPointsPromptPopover(task: Task) {
+    const selected = this._pointsPromptSelected;
+    return html`
+      <div class="snooze-popover">
+        <span class="form-label">Who completed "${task.title}"?</span>
+        ${this._roster.length > 0 ? html`
+          <div class="points-roster-picker">
+            ${this._roster.map(name => html`
+              <label class="points-roster-option">
+                <input type="checkbox" .checked=${selected.includes(name)}
+                  @change=${() => this._togglePromptRecipient(name)} />
+                ${name}
+              </label>
+            `)}
+          </div>
+        ` : nothing}
+        <input class="form-input" placeholder="Or type a name"
+          list="smart-todo-roster-list"
+          .value=${this._pointsPromptManualName}
+          @input=${(e: Event) => this._pointsPromptManualName = (e.target as HTMLInputElement).value} />
+        <div class="form-hint">
+          ${selected.length + (this._pointsPromptManualName.trim() ? 1 : 0) > 1
+            ? `${task.points}pts will be split evenly between everyone selected.`
+            : `${task.points}pts will be awarded to whoever is selected.`}
+        </div>
+        <div class="form-actions">
+          <button class="form-btn cancel" @click=${() => this._pointsPromptTaskId = undefined}>Cancel</button>
+          <button class="form-btn cancel" @click=${() => this._declinePointsPrompt()}>Don't award points</button>
+          <button class="form-btn submit"
+            ?disabled=${selected.length === 0 && !this._pointsPromptManualName.trim()}
+            @click=${() => this._confirmPointsPrompt()}>Confirm</button>
+        </div>
+      </div>
+    `;
   }
 
   private _deleteTask(taskId: string): void {
@@ -1264,7 +1358,7 @@ export class SmartTodoCard extends LitElement {
             <!-- Complete button (hidden if already completed) -->
             ${!task.completed ? html`
               <button class="action-btn complete" title="Complete"
-                @click=${() => this._completeTask(task.id)}>✓</button>
+                @click=${() => this._completeTask(task)}>✓</button>
             ` : nothing}
 
             <!-- Edit button -->
@@ -1289,6 +1383,9 @@ export class SmartTodoCard extends LitElement {
 
       <!-- Snooze popover (shown below this task row when active) -->
       ${this._snoozeTaskId === task.id ? this._renderSnoozePopover() : nothing}
+
+      <!-- Recipient prompt (shown below this task row when active) -->
+      ${this._pointsPromptTaskId === task.id ? this._renderPointsPromptPopover(task) : nothing}
     `;
   }
 }

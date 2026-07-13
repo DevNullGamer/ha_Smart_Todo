@@ -119,7 +119,7 @@ class SmartTodoStore:
         self._definitions: dict[str, TaskDefinition] = {}
         self._states: dict[str, TaskRuntimeState] = {}
         self._spend_entries: list[SpendEntry] = []
-        self._earned_totals: dict[str, int] = {}
+        self._earned_totals: dict[str, int | float] = {}
         self._recipient_display_names: dict[str, str] = {}
 
     # ------------------------------------------------------------------
@@ -193,7 +193,7 @@ class SmartTodoStore:
         # already was, or _async_migrate() just brought it up to date — so
         # earned_totals/recipient_display_names/spend_entries are guaranteed
         # present (every migration ensures its own target shape).
-        earned_totals: dict[str, int] = dict(data.get("earned_totals") or {})
+        earned_totals: dict[str, int | float] = dict(data.get("earned_totals") or {})
         display_names: dict[str, str] = dict(data.get("recipient_display_names") or {})
 
         self._definitions = definitions
@@ -285,10 +285,12 @@ class SmartTodoStore:
         return list(self._spend_entries)
 
     @property
-    def earned_totals(self) -> dict[str, int]:
+    def earned_totals(self) -> dict[str, int | float]:
         """Return a shallow copy of all persisted per-recipient earned totals.
 
-        Keyed by normalized (``strip().lower()``) recipient name.
+        Keyed by normalized (``strip().lower()``) recipient name. Values are
+        float only for recipients who have received a split (multi-person)
+        award at some point; whole-point awards stay int.
         """
         return dict(self._earned_totals)
 
@@ -321,7 +323,7 @@ class SmartTodoStore:
         """Append a new spend ledger entry."""
         self._spend_entries.append(entry)
 
-    def add_earned(self, normalized_recipient: str, amount: int) -> None:
+    def add_earned(self, normalized_recipient: str, amount: int | float) -> None:
         """Credit *amount* points to a recipient's persisted earned total."""
         self._earned_totals[normalized_recipient] = (
             self._earned_totals.get(normalized_recipient, 0) + amount

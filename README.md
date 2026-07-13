@@ -55,11 +55,13 @@ Every service accepts an optional `config_entry_id` field to target a specific l
 
 ### Completion event
 
-Completing a task fires the Home Assistant event `smart_todo_task_completed` with data including `task_id`, `title`, `points`, `points_awarded`, `reward_recipient`, and `completed_at`.
+Completing a task fires the Home Assistant event `smart_todo_task_completed` with data including `task_id`, `title`, `points`, `points_awarded`, `reward_recipient`, `recipients_awarded`, and `completed_at`.
 
 ### Reward points
 
 Tasks can optionally define `points` and `reward_recipient` when created or updated. If a task is completed and points are configured, the recipient is credited with those points. If no `reward_recipient` is provided, the task `assignee` is used. This makes it work even for users who do not have Home Assistant accounts.
+
+If a task has neither a `reward_recipient` nor an `assignee`, there's no one to auto-credit — the Lovelace card prompts for who completed it (with a "don't award points" option) instead of silently skipping the award. The same choice is available directly via `complete_task`'s optional `recipients` field: a list of names splits the points evenly between them (to 2 decimal places), an explicit empty list awards nobody, and omitting the field keeps the normal auto-resolve behavior.
 
 The todo entity exposes aggregated point attributes: `points_available` (unclaimed, from incomplete tasks), `points_earned_total` / `points_by_recipient` (lifetime gross earned), and `points_spent_total` / `points_balance_by_recipient` (net, after spending).
 

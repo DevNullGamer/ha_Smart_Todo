@@ -117,12 +117,21 @@ class SmartTodoCoordinator(
         await self.async_refresh()
         return task_id
 
-    async def async_complete_task(self, task_id: str) -> None:
+    async def async_complete_task(
+        self, task_id: str, recipients: list[str] | None = None
+    ) -> None:
         """Mark a task complete.
 
         For recurring tasks the completion is registered, a new due_at is
         computed, and completed is immediately reset to False so the task
         remains active on the next recurrence.
+
+        *recipients*, when given, overrides the normal
+        reward_recipient/assignee auto-resolution: points are split evenly
+        (2-decimal precision) across the named people. An empty list means
+        "explicitly award to nobody" (used by the card's unassigned-task
+        prompt); ``None`` (the default) preserves the original
+        auto-resolve-or-skip behaviour.
         """
         states = self._store.states
         definitions = self._store.definitions
@@ -155,19 +164,37 @@ class SmartTodoCoordinator(
             state.completed = False
             starting_new_cycle = True
 
-        points_awarded = 0
+        points_awarded: int | float = 0
         reward_recipient: str | None = None
+        recipients_awarded: list[dict] = []
         # points_awarded_this_cycle guards against earning points repeatedly by
         # reopening and re-completing the same (non-recurring) task — reopening
         # resets `completed` but must not reset eligibility for a fresh reward.
         if not already_awarded_this_cycle and definition is not None and definition.points > 0:
-            reward_recipient = definition.reward_recipient or definition.assignee
-            if reward_recipient is not None:
-                state.points_earned += definition.points
-                points_awarded = definition.points
-                normalized = self.normalize_recipient(reward_recipient)
-                self._store.add_earned(normalized, points_awarded)
-                self._store.record_recipient_seen(normalized, reward_recipient.strip())
+            if recipients is not None:
+                chosen = [name for name in recipients if name]
+            else:
+                auto = definition.reward_recipient or definition.assignee
+                chosen = [auto] if auto is not None else []
+
+            if chosen:
+                total = definition.points
+                if len(chosen) == 1:
+                    shares = [total]
+                else:
+                    share = round(total / len(chosen), 2)
+                    shares = [share] * len(chosen)
+                    shares[-1] = round(total - share * (len(chosen) - 1), 2)
+
+                for name, share in zip(chosen, shares):
+                    state.points_earned += share
+                    normalized = self.normalize_recipient(name)
+                    self._store.add_earned(normalized, share)
+                    self._store.record_recipient_seen(normalized, name.strip())
+                    recipients_awarded.append({"recipient": name, "points": share})
+
+                points_awarded = total
+                reward_recipient = chosen[0] if len(chosen) == 1 else None
 
         # A new recurrence cycle always starts fresh and eligible for its own
         # reward; otherwise latch the flag once points have been awarded.
@@ -187,6 +214,7 @@ class SmartTodoCoordinator(
                 "points": definition.points if definition is not None else 0,
                 "points_awarded": points_awarded,
                 "reward_recipient": reward_recipient,
+                "recipients_awarded": recipients_awarded,
                 "completed_at": now.isoformat(),
             },
         )
@@ -213,7 +241,7 @@ class SmartTodoCoordinator(
         """Canonicalization rule used everywhere recipient names are compared."""
         return name.strip().lower()
 
-    def get_earned_total(self, recipient: str) -> int:
+    def get_earned_total(self, recipient: str) -> int | float:
         """Return recipient's persisted lifetime earned total (case-insensitive).
 
         Backed by SmartTodoStore's independent ``earned_totals`` ledger, not
@@ -232,7 +260,7 @@ class SmartTodoCoordinator(
             if self.normalize_recipient(entry.recipient) == target
         )
 
-    def get_balance(self, recipient: str) -> int:
+    def get_balance(self, recipient: str) -> int | float:
         """Return *recipient*'s current spendable balance (earned minus spent)."""
         return self.get_earned_total(recipient) - self.get_spent_total(recipient)
 

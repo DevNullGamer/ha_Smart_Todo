@@ -88,7 +88,7 @@ class SmartTodoRosterSensor(CoordinatorEntity[SmartTodoCoordinator], SensorEntit
     # ------------------------------------------------------------------
 
     @property
-    def native_value(self) -> int:
+    def native_value(self) -> int | float:
         """Return the recipient's current spendable balance."""
         return self.coordinator.get_balance(self._recipient)
 

@@ -4,11 +4,25 @@
 # `pytest` itself, which pytest-homeassistant-custom-component pulls in
 # transitively along with a compatible `homeassistant` core version.
 #
-# Left unpinned deliberately, but watch the first CI run: if pip has to
-# backtrack to an older release to satisfy the Python version pinned in
-# .github/workflows/build.yml, tests will run against a stale simulated HA
-# core rather than failing outright. If that happens, either bump the
-# workflow's Python version or pin this package explicitly to a version
-# known-good for the pinned Python version.
-pytest-homeassistant-custom-component
-pytest-asyncio
+# Pinned deliberately, after leaving this unpinned caused two real problems
+# on a from-scratch install: (1) pip's default resolver backtracks through
+# dozens of unrelated Bluetooth-stack releases (habluetooth,
+# bluetooth-data-tools, PyRIC) trying to satisfy homeassistant's own
+# dependency graph, effectively hanging; (2) installing with
+# `--use-deprecated=legacy-resolver` to avoid that finishes fast but
+# silently ignores pytest-homeassistant-custom-component's own exact pins
+# (pytest-asyncio==0.24.0, SQLAlchemy==2.0.36) and homeassistant's
+# (aiohttp==3.11.11, httpx==0.27.2, requests==2.32.3) — installing whatever
+# newer versions happen to already be resolved instead, which for
+# pytest-asyncio breaks every test outright (pytest-asyncio>=1.0 removed
+# the `event_loop` fixture pytest-homeassistant-custom-component still
+# relies on). Pinning everything explicitly here lets the modern resolver
+# satisfy the whole graph without backtracking, and keeps installs
+# reproducible. Verified working together on Python 3.12 (Windows).
+homeassistant==2025.1.4
+pytest-homeassistant-custom-component==0.13.205
+pytest-asyncio==0.24.0
+SQLAlchemy==2.0.36
+aiohttp==3.11.11
+httpx==0.27.2
+requests==2.32.3

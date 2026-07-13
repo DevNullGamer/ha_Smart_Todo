@@ -40,6 +40,13 @@ All notable changes to this project are documented here. Format follows
 - Card: points badge on task rows, Points/Reward recipient fields in the
   create/edit form, and roster-backed autocomplete on the Assignee and
   Reward recipient fields.
+- **Card: split-award prompt for unassigned tasks.** Completing a
+  points-bearing task with no assignee and no reward recipient now prompts
+  for who actually did it (roster checkboxes plus a free-text fallback),
+  with a "Don't award points" option. Selecting more than one person splits
+  the points evenly (to 2 decimal places). `complete_task` gained a matching
+  optional `recipients` field; omitting it keeps today's auto-resolve
+  behavior, an explicit empty list awards nobody.
 
 ### Changed
 
