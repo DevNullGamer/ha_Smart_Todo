@@ -80,3 +80,13 @@
         title: "Take out the trash"
         points: 5
         reward_recipient: "Mina"
+
+# config_entry_id is only needed if you have more than one Smart Todo list —
+# find it under Settings -> Devices & services -> Smart Todo -> your list ->
+# Download diagnostics ("entry_id"), or by hovering the config entry.
+- alias: "Smart Todo: Create task on a specific list"
+  actions:
+    - action: smart_todo.create_task
+      data:
+        title: "Buy groceries"
+        config_entry_id: "YOUR_GROCERIES_LIST_CONFIG_ENTRY_ID"

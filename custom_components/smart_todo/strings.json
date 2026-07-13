@@ -47,21 +47,24 @@
         "assignee": { "name": "Assignee", "description": "Optional assignee name." },
         "recurrence": { "name": "Recurrence", "description": "Recurrence rule as a dict." },
         "points": { "name": "Points", "description": "Optional reward points earned when this task is completed." },
-        "reward_recipient": { "name": "Reward recipient", "description": "Who earns the points on completion. Falls back to assignee if omitted." }
+        "reward_recipient": { "name": "Reward recipient", "description": "Who earns the points on completion. Falls back to assignee if omitted." },
+        "config_entry_id": { "name": "List", "description": "Which Smart Todo list to target. Only needed if you have more than one." }
       }
     },
     "complete_task": {
       "name": "Complete task",
       "description": "Marks a task as completed and triggers recurrence recalculation.",
       "fields": {
-        "task_id": { "name": "Task ID", "description": "Unique task identifier." }
+        "task_id": { "name": "Task ID", "description": "Unique task identifier." },
+        "config_entry_id": { "name": "List", "description": "Which Smart Todo list to target. Only needed if you have more than one." }
       }
     },
     "reopen_task": {
       "name": "Reopen task",
       "description": "Reopens a completed task.",
       "fields": {
-        "task_id": { "name": "Task ID", "description": "Unique task identifier." }
+        "task_id": { "name": "Task ID", "description": "Unique task identifier." },
+        "config_entry_id": { "name": "List", "description": "Which Smart Todo list to target. Only needed if you have more than one." }
       }
     },
     "update_task": {
@@ -75,7 +78,8 @@
         "priority": { "name": "Priority", "description": "New priority (optional)." },
         "assignee": { "name": "Assignee", "description": "New assignee (optional)." },
         "points": { "name": "Points", "description": "New reward points value (optional)." },
-        "reward_recipient": { "name": "Reward recipient", "description": "New reward recipient (optional)." }
+        "reward_recipient": { "name": "Reward recipient", "description": "New reward recipient (optional)." },
+        "config_entry_id": { "name": "List", "description": "Which Smart Todo list to target. Only needed if you have more than one." }
       }
     },
     "snooze_task": {
@@ -83,21 +87,24 @@
       "description": "Snoozes a task until a specified date/time.",
       "fields": {
         "task_id": { "name": "Task ID", "description": "Unique task identifier." },
-        "snooze_until": { "name": "Snooze until", "description": "Snooze until this date/time (ISO 8601)." }
+        "snooze_until": { "name": "Snooze until", "description": "Snooze until this date/time (ISO 8601)." },
+        "config_entry_id": { "name": "List", "description": "Which Smart Todo list to target. Only needed if you have more than one." }
       }
     },
     "delete_task": {
       "name": "Delete task",
       "description": "Permanently deletes a task.",
       "fields": {
-        "task_id": { "name": "Task ID", "description": "Unique task identifier." }
+        "task_id": { "name": "Task ID", "description": "Unique task identifier." },
+        "config_entry_id": { "name": "List", "description": "Which Smart Todo list to target. Only needed if you have more than one." }
       }
     },
     "recalculate_recurrence": {
       "name": "Recalculate recurrence",
       "description": "Recalculates due dates for recurring tasks.",
       "fields": {
-        "task_id": { "name": "Task ID", "description": "Optional. If omitted, recalculates all tasks." }
+        "task_id": { "name": "Task ID", "description": "Optional. If omitted, recalculates all tasks." },
+        "config_entry_id": { "name": "List", "description": "Which Smart Todo list to target. Only needed if you have more than one." }
       }
     },
     "get_tasks": {
@@ -107,7 +114,15 @@
         "overdue_only": { "name": "Overdue only", "description": "If true, return only overdue tasks." },
         "assignee": { "name": "Assignee filter", "description": "Filter by assignee name." },
         "priority": { "name": "Priority filter", "description": "Filter by priority (1/2/3)." },
-        "completed": { "name": "Completed filter", "description": "If true, include only completed. If false, exclude completed. If omitted, include all." }
+        "completed": { "name": "Completed filter", "description": "If true, include only completed. If false, exclude completed. If omitted, include all." },
+        "config_entry_id": { "name": "List", "description": "Which Smart Todo list to target. Only needed if you have more than one." }
+      }
+    },
+    "purge_completed": {
+      "name": "Purge completed tasks",
+      "description": "Permanently deletes all completed non-recurring tasks.",
+      "fields": {
+        "config_entry_id": { "name": "List", "description": "Which Smart Todo list to target. Only needed if you have more than one." }
       }
     },
     "spend_points": {
@@ -116,7 +131,8 @@
       "fields": {
         "recipient": { "name": "Recipient", "description": "Who is spending points. Must match the configured roster if one is set." },
         "amount": { "name": "Amount", "description": "How many points to deduct. Cannot exceed the current balance." },
-        "note": { "name": "Spent on", "description": "Optional free-text note describing what the points were spent on." }
+        "note": { "name": "Spent on", "description": "Optional free-text note describing what the points were spent on." },
+        "config_entry_id": { "name": "List", "description": "Which Smart Todo list to target. Only needed if you have more than one." }
       }
     }
   }

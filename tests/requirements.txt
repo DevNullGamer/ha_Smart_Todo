@@ -1,0 +1,14 @@
+# Test-only dependencies for the HA-backed integration test suite
+# (tests/test_coordinator_integration.py). The existing HA-free model tests
+# (test_recurrence.py, test_reward_points.py, test_spending.py) need only
+# `pytest` itself, which pytest-homeassistant-custom-component pulls in
+# transitively along with a compatible `homeassistant` core version.
+#
+# Left unpinned deliberately, but watch the first CI run: if pip has to
+# backtrack to an older release to satisfy the Python version pinned in
+# .github/workflows/build.yml, tests will run against a stale simulated HA
+# core rather than failing outright. If that happens, either bump the
+# workflow's Python version or pin this package explicitly to a version
+# known-good for the pinned Python version.
+pytest-homeassistant-custom-component
+pytest-asyncio

@@ -49,6 +49,10 @@ Provide a name for the list (e.g. "Family Tasks") when prompted during setup.
 | `smart_todo.get_tasks` | Query tasks (returns response data, including the configured roster) |
 | `smart_todo.spend_points` | Deduct points from a recipient's balance |
 
+Every service accepts an optional `config_entry_id` field to target a specific list. It's only needed if you have more than one Smart Todo list configured — with a single list, every service auto-resolves to it exactly as before. With two or more lists and no `config_entry_id`, a service call fails with a clear error naming the available lists rather than silently guessing one. The UI's service picker offers a dropdown for this field; find the raw ID under **Settings → Devices & services → Smart Todo → (three dots) → Download diagnostics**, or by hovering the integration entry.
+
+> **Multi-list + the card:** the bundled Lovelace card does not yet send `config_entry_id`, so with two or more lists configured, card actions will hit the "multiple lists configured" error even though the card is already pointed at one specific list's entity. Use the service call directly (with `config_entry_id`) until the card is updated.
+
 ### Completion event
 
 Completing a task fires the Home Assistant event `smart_todo_task_completed` with data including `task_id`, `title`, `points`, `points_awarded`, `reward_recipient`, and `completed_at`.
@@ -115,6 +119,21 @@ npm run dev     # watch mode with source maps
 ```
 
 The compiled `smart-todo-card.js` is committed to the repo so end users do not need Node.js.
+
+### Running tests
+
+```bash
+pip install -r tests/requirements.txt
+pytest
+```
+
+`tests/test_recurrence.py`, `test_reward_points.py`, and `test_spending.py` load
+`models.py`/`recurrence.py` standalone and need only `pytest` itself — no Home
+Assistant install required. `tests/test_coordinator_integration.py` exercises
+the real config-entry setup path against an in-memory Home Assistant core via
+[pytest-homeassistant-custom-component](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component),
+which `tests/requirements.txt` installs alongside a compatible `homeassistant`
+core version.
 
 ## Automation Examples
 

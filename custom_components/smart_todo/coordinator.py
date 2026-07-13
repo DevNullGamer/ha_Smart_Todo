@@ -192,6 +192,15 @@ class SmartTodoCoordinator(
         )
 
     # ------------------------------------------------------------------
+    # Config entry identity
+    # ------------------------------------------------------------------
+
+    @property
+    def title(self) -> str:
+        """Return this list's display name (the config entry title)."""
+        return self._entry.title
+
+    # ------------------------------------------------------------------
     # Roster / reward ledger
     # ------------------------------------------------------------------
 

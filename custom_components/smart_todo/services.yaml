@@ -59,6 +59,14 @@ create_task:
       example: "Mina"
       selector:
         text:
+    # Anchor defined once here; every other service below reuses it via a
+    # YAML alias (*config_entry_id_field) instead of repeating the block.
+    config_entry_id: &config_entry_id_field
+      name: List
+      description: "Which Smart Todo list to target. Only needed if you have more than one."
+      selector:
+        config_entry:
+          integration: smart_todo
 
 complete_task:
   name: Complete task
@@ -71,6 +79,7 @@ complete_task:
       example: "abc-123"
       selector:
         text:
+    config_entry_id: *config_entry_id_field
 
 reopen_task:
   name: Reopen task
@@ -82,6 +91,7 @@ reopen_task:
       required: true
       selector:
         text:
+    config_entry_id: *config_entry_id_field
 
 update_task:
   name: Update task
@@ -141,6 +151,7 @@ update_task:
       example: "Mina"
       selector:
         text:
+    config_entry_id: *config_entry_id_field
 
 snooze_task:
   name: Snooze task
@@ -159,6 +170,7 @@ snooze_task:
       example: "2026-06-02T08:00:00"
       selector:
         text:
+    config_entry_id: *config_entry_id_field
 
 delete_task:
   name: Delete task
@@ -170,6 +182,7 @@ delete_task:
       required: true
       selector:
         text:
+    config_entry_id: *config_entry_id_field
 
 recalculate_recurrence:
   name: Recalculate recurrence
@@ -180,6 +193,7 @@ recalculate_recurrence:
       description: "Optional. If omitted, recalculates all tasks."
       selector:
         text:
+    config_entry_id: *config_entry_id_field
 
 get_tasks:
   name: Get tasks
@@ -209,11 +223,13 @@ get_tasks:
       description: "true = completed only, false = incomplete only, omit = all."
       selector:
         boolean:
+    config_entry_id: *config_entry_id_field
 
 purge_completed:
   name: Purge completed tasks
   description: Permanently deletes all completed non-recurring tasks.
-  fields: {}
+  fields:
+    config_entry_id: *config_entry_id_field
 
 spend_points:
   name: Spend points
@@ -241,3 +257,4 @@ spend_points:
       example: "30 min extra screen time"
       selector:
         text:
+    config_entry_id: *config_entry_id_field

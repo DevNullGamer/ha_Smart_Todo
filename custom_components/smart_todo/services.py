@@ -32,7 +32,24 @@ _LOGGER = logging.getLogger(__name__)
 # Schemas
 # ---------------------------------------------------------------------------
 
-CREATE_TASK_SCHEMA = vol.Schema(
+# Every service schema is built through _service_schema() below, which adds
+# this shared optional field. Only needed when more than one Smart Todo list
+# is configured; omitted, the call auto-resolves to "the only list" and
+# behaves exactly as before.
+_CONFIG_ENTRY_ID_FIELD = {vol.Optional("config_entry_id"): cv.string}
+
+
+def _service_schema(fields: dict) -> vol.Schema:
+    """Build a service schema, adding the shared list-targeting field.
+
+    Centralizing this (rather than splicing _CONFIG_ENTRY_ID_FIELD into each
+    schema literal) means a newly added service schema only supports
+    list-targeting by explicitly going through this function.
+    """
+    return vol.Schema(fields).extend(_CONFIG_ENTRY_ID_FIELD)
+
+
+CREATE_TASK_SCHEMA = _service_schema(
     {
         vol.Required("title"): cv.string,
         vol.Optional("notes"): vol.Any(None, cv.string),
@@ -45,13 +62,13 @@ CREATE_TASK_SCHEMA = vol.Schema(
     }
 )
 
-TASK_ID_SCHEMA = vol.Schema(
+TASK_ID_SCHEMA = _service_schema(
     {
         vol.Required("task_id"): cv.string,
     }
 )
 
-UPDATE_TASK_SCHEMA = vol.Schema(
+UPDATE_TASK_SCHEMA = _service_schema(
     {
         vol.Required("task_id"): cv.string,
         vol.Optional("title"): cv.string,
@@ -65,20 +82,20 @@ UPDATE_TASK_SCHEMA = vol.Schema(
     }
 )
 
-SNOOZE_TASK_SCHEMA = vol.Schema(
+SNOOZE_TASK_SCHEMA = _service_schema(
     {
         vol.Required("task_id"): cv.string,
         vol.Optional("snooze_until"): cv.string,
     }
 )
 
-RECALCULATE_SCHEMA = vol.Schema(
+RECALCULATE_SCHEMA = _service_schema(
     {
         vol.Optional("task_id"): vol.Any(None, cv.string),
     }
 )
 
-GET_TASKS_SCHEMA = vol.Schema(
+GET_TASKS_SCHEMA = _service_schema(
     {
         vol.Optional("overdue_only", default=False): cv.boolean,
         vol.Optional("assignee"): vol.Any(None, cv.string),
@@ -87,9 +104,9 @@ GET_TASKS_SCHEMA = vol.Schema(
     }
 )
 
-PURGE_COMPLETED_SCHEMA = vol.Schema({})
+PURGE_COMPLETED_SCHEMA = _service_schema({})
 
-SPEND_POINTS_SCHEMA = vol.Schema(
+SPEND_POINTS_SCHEMA = _service_schema(
     {
         vol.Required("recipient"): cv.string,
         vol.Required("amount"): vol.All(vol.Coerce(int), vol.Range(min=1)),
@@ -103,12 +120,47 @@ SPEND_POINTS_SCHEMA = vol.Schema(
 
 
 def _get_coordinator(hass: HomeAssistant, call: ServiceCall) -> SmartTodoCoordinator:
-    """Return the first registered coordinator. Raises HomeAssistantError if none."""
+    """Return the coordinator for the targeted Smart Todo list.
+
+    If `config_entry_id` is present in the call data, resolve directly to
+    that list. Otherwise auto-resolve when exactly one list is configured —
+    the common case, and identical to this integration's original behaviour.
+    With multiple lists configured and no target given, raise a clear error
+    naming the available lists rather than silently picking one.
+    """
     domain_data = hass.data.get(DOMAIN, {})
-    for value in domain_data.values():
-        if isinstance(value, SmartTodoCoordinator):
-            return value
-    raise HomeAssistantError("Smart Todo integration is not configured.")
+    coordinators: dict[str, SmartTodoCoordinator] = {
+        entry_id: value
+        for entry_id, value in domain_data.items()
+        if isinstance(value, SmartTodoCoordinator)
+    }
+
+    config_entry_id = call.data.get("config_entry_id")
+    if config_entry_id is not None:
+        coordinator = coordinators.get(config_entry_id)
+        if coordinator is None:
+            raise HomeAssistantError(
+                f"No Smart Todo list found for config_entry_id '{config_entry_id}'."
+            )
+        return coordinator
+
+    if not coordinators:
+        raise HomeAssistantError("Smart Todo integration is not configured.")
+    if len(coordinators) == 1:
+        return next(iter(coordinators.values()))
+
+    # Include entry_id alongside title: it's what the caller actually needs
+    # to supply, and titles aren't guaranteed unique — the config flow checks
+    # uniqueness at creation time, but a later rename via the generic HA
+    # "rename" UI doesn't re-check it against other entries.
+    listing = ", ".join(
+        f"{coord.title} ({entry_id})"
+        for entry_id, coord in sorted(coordinators.items(), key=lambda kv: kv[1].title)
+    )
+    raise HomeAssistantError(
+        "Multiple Smart Todo lists are configured — specify 'config_entry_id' "
+        f"to choose one. Available lists: {listing}."
+    )
 
 
 def _validate_recipient(
@@ -192,7 +244,9 @@ async def async_update_task(call: ServiceCall) -> None:
     coordinator = _get_coordinator(call.hass, call)
 
     task_id: str = call.data["task_id"]
-    patch: dict = {k: v for k, v in call.data.items() if k != "task_id"}
+    patch: dict = {
+        k: v for k, v in call.data.items() if k not in ("task_id", "config_entry_id")
+    }
 
     # Validate due_at if present and non-None
     if "due_at" in patch and patch["due_at"] is not None:
